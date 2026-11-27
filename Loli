@@ -1,0 +1,1083 @@
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+local parentGui = (gethui and gethui()) or game:GetService("CoreGui") or player:WaitForChild("PlayerGui")
+
+if parentGui:FindFirstChild("UI_DarkWare") then
+	parentGui.UI_DarkWare:Destroy()
+end
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "UI_DarkWare"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+screenGui.Parent = parentGui
+
+local logoImage = "rbxassetid://88367981964903"
+
+local uiScale = Instance.new("UIScale")
+uiScale.Parent = screenGui
+
+local function updateScale()
+	local vp = camera.ViewportSize
+	local minDim = math.min(vp.X, vp.Y)
+	uiScale.Scale = math.clamp(minDim / 390, 0.85, 1.15)
+end
+updateScale()
+camera:GetPropertyChangedSignal("ViewportSize"):Connect(updateScale)
+
+local palette = {
+	black = Color3.fromRGB(0, 0, 0),
+	panelBlack = Color3.fromRGB(8, 8, 8),
+	headerBlack = Color3.fromRGB(14, 14, 14),
+	cardBlack = Color3.fromRGB(20, 20, 20),
+	white = Color3.fromRGB(255, 255, 255),
+	muted = Color3.fromRGB(170, 170, 170),
+	borderGrad = ColorSequence.new{
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(0, 0, 0)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(0, 0, 0)),
+	},
+}
+
+local animatedGradients = {}
+
+local function round(obj, px)
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, px)
+	c.Parent = obj
+	return c
+end
+
+local function applyBWStroke(target, thickness, transparency)
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = palette.white
+	stroke.Thickness = thickness or 1.4
+	stroke.Transparency = transparency or 0
+	stroke.Parent = target
+
+	local grad = Instance.new("UIGradient")
+	grad.Color = palette.borderGrad
+	grad.Parent = stroke
+
+	return stroke, grad
+end
+
+local aimState = {
+	enabled = false,
+	mode = "Nearest",
+	fovSize = 160,
+}
+
+local currentTargetPlayer = nil
+
+local fovFrame = Instance.new("Frame")
+fovFrame.Name = "DarkWareAimFov"
+fovFrame.Size = UDim2.new(0, aimState.fovSize, 0, aimState.fovSize)
+fovFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
+fovFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+fovFrame.BackgroundTransparency = 1
+fovFrame.BorderSizePixel = 0
+fovFrame.Visible = false
+fovFrame.ZIndex = 4
+fovFrame.Parent = screenGui
+round(fovFrame, 999)
+local _, fovGrad = applyBWStroke(fovFrame, 1.3, 0.25)
+table.insert(animatedGradients, fovGrad)
+
+local fxLayer = Instance.new("Frame")
+fxLayer.Name = "DarkWareRainFx"
+fxLayer.Size = UDim2.new(1, 0, 1, 0)
+fxLayer.BackgroundTransparency = 1
+fxLayer.BorderSizePixel = 0
+fxLayer.ClipsDescendants = true
+fxLayer.Visible = false
+fxLayer.ZIndex = 2
+fxLayer.Parent = screenGui
+
+local rainDrops = {}
+for i = 1, 24 do
+	local drop = Instance.new("Frame")
+	drop.Size = UDim2.new(0, 2, 0, 16 + (i % 3) * 5)
+	drop.Position = UDim2.new((i * 0.041) % 1, 0, (i * 0.073) % 1, 0)
+	drop.BackgroundColor3 = palette.white
+	drop.BackgroundTransparency = 0.55
+	drop.BorderSizePixel = 0
+	drop.Parent = fxLayer
+	round(drop, 999)
+	table.insert(rainDrops, {
+		frame = drop,
+		x = (i * 0.041) % 1,
+		y = (i * 0.073) % 1,
+		speed = 0.8 + (i % 4) * 0.2
+	})
+end
+
+local stars = {}
+for i = 1, 14 do
+	local st = Instance.new("Frame")
+	local sz = (i % 3 == 0) and 4 or 2
+	st.Size = UDim2.new(0, sz, 0, sz)
+	st.Position = UDim2.new((i * 0.067) % 1, 0, (i * 0.097) % 1, 0)
+	st.BackgroundColor3 = palette.white
+	st.BackgroundTransparency = 0.35
+	st.BorderSizePixel = 0
+	st.Parent = fxLayer
+	round(st, 999)
+	table.insert(stars, {
+		frame = st,
+		phase = i * 0.7,
+		speed = 1.5 + (i % 3) * 0.4
+	})
+end
+
+local introFrame = Instance.new("Frame")
+introFrame.Size = UDim2.new(1, 0, 1, 0)
+introFrame.BackgroundColor3 = palette.black
+introFrame.BackgroundTransparency = 0
+introFrame.BorderSizePixel = 0
+introFrame.ZIndex = 50
+introFrame.Parent = screenGui
+
+local introTitle = Instance.new("TextLabel")
+introTitle.Size = UDim2.new(0, 280, 0, 56)
+introTitle.Position = UDim2.new(0.5, 0, 0.41, 0)
+introTitle.AnchorPoint = Vector2.new(0.5, 0.5)
+introTitle.BackgroundTransparency = 1
+introTitle.Text = "DarkWare"
+introTitle.TextColor3 = palette.white
+introTitle.Font = Enum.Font.GothamBlack
+introTitle.TextSize = 34
+introTitle.TextTransparency = 0
+introTitle.ZIndex = 51
+introTitle.Parent = introFrame
+
+local introPercent = Instance.new("TextLabel")
+introPercent.Size = UDim2.new(0, 160, 0, 28)
+introPercent.Position = UDim2.new(0.5, 0, 0.48, 0)
+introPercent.AnchorPoint = Vector2.new(0.5, 0.5)
+introPercent.BackgroundTransparency = 1
+introPercent.Text = "1%"
+introPercent.TextColor3 = palette.white
+introPercent.Font = Enum.Font.GothamBold
+introPercent.TextSize = 16
+introPercent.ZIndex = 51
+introPercent.Parent = introFrame
+
+local introTrack = Instance.new("Frame")
+introTrack.Size = UDim2.new(0, 220, 0, 8)
+introTrack.Position = UDim2.new(0.5, 0, 0.535, 0)
+introTrack.AnchorPoint = Vector2.new(0.5, 0.5)
+introTrack.BackgroundColor3 = palette.panelBlack
+introTrack.BorderSizePixel = 0
+introTrack.ClipsDescendants = true
+introTrack.ZIndex = 51
+introTrack.Parent = introFrame
+round(introTrack, 999)
+applyBWStroke(introTrack, 1.2, 0.2)
+
+local introBar = Instance.new("Frame")
+introBar.Size = UDim2.new(0.01, 0, 1, 0)
+introBar.Position = UDim2.new(0, 0, 0, 0)
+introBar.BackgroundColor3 = palette.white
+introBar.BorderSizePixel = 0
+introBar.ZIndex = 52
+introBar.Parent = introTrack
+round(introBar, 999)
+
+local introGrad = Instance.new("UIGradient")
+introGrad.Color = palette.borderGrad
+introGrad.Parent = introBar
+table.insert(animatedGradients, introGrad)
+
+local topDock = Instance.new("Frame")
+topDock.Name = "DarkWareTopBar"
+topDock.Size = UDim2.new(0, 344, 0, 44)
+topDock.Position = UDim2.new(0.5, 0, 0.065, 0)
+topDock.AnchorPoint = Vector2.new(0.5, 0.5)
+topDock.BackgroundColor3 = palette.black
+topDock.BackgroundTransparency = 0.05
+topDock.BorderSizePixel = 0
+topDock.Visible = false
+topDock.ZIndex = 30
+topDock.Parent = screenGui
+round(topDock, 999)
+local _, dockGrad = applyBWStroke(topDock, 1.5, 0.1)
+table.insert(animatedGradients, dockGrad)
+
+local logoBadge = Instance.new("ImageLabel")
+logoBadge.Name = "Logo"
+logoBadge.Size = UDim2.new(0, 28, 0, 28)
+logoBadge.Position = UDim2.new(0, 8, 0.5, -14)
+logoBadge.BackgroundColor3 = palette.headerBlack
+logoBadge.BackgroundTransparency = 0.1
+logoBadge.BorderSizePixel = 0
+logoBadge.Image = logoImage
+logoBadge.ScaleType = Enum.ScaleType.Fit
+logoBadge.ZIndex = 31
+logoBadge.Parent = topDock
+round(logoBadge, 999)
+applyBWStroke(logoBadge, 1.1, 0.2)
+
+local nameLabel = Instance.new("TextLabel")
+nameLabel.Name = "Name"
+nameLabel.Size = UDim2.new(0, 62, 1, -10)
+nameLabel.Position = UDim2.new(0, 41, 0, 5)
+nameLabel.BackgroundTransparency = 1
+nameLabel.Text = "DarkWare"
+nameLabel.TextColor3 = palette.white
+nameLabel.Font = Enum.Font.GothamBlack
+nameLabel.TextSize = 10
+nameLabel.TextXAlignment = Enum.TextXAlignment.Left
+nameLabel.TextTruncate = Enum.TextTruncate.AtEnd
+nameLabel.ZIndex = 31
+nameLabel.Parent = topDock
+
+local tabsContainer = Instance.new("Frame")
+tabsContainer.Name = "TabsContainer"
+tabsContainer.Size = UDim2.new(0, 184, 1, -10)
+tabsContainer.Position = UDim2.new(0, 108, 0, 5)
+tabsContainer.BackgroundColor3 = palette.panelBlack
+tabsContainer.BackgroundTransparency = 0.15
+tabsContainer.BorderSizePixel = 0
+tabsContainer.ZIndex = 31
+tabsContainer.Parent = topDock
+round(tabsContainer, 999)
+applyBWStroke(tabsContainer, 1.1, 0.35)
+
+local tabsLayout = Instance.new("UIListLayout")
+tabsLayout.FillDirection = Enum.FillDirection.Horizontal
+tabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tabsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+tabsLayout.Padding = UDim.new(0, 6)
+tabsLayout.Parent = tabsContainer
+
+local toggleVisibilityBtn = Instance.new("TextButton")
+toggleVisibilityBtn.Size = UDim2.new(0, 34, 1, -10)
+toggleVisibilityBtn.Position = UDim2.new(1, -40, 0, 5)
+toggleVisibilityBtn.BackgroundColor3 = palette.headerBlack
+toggleVisibilityBtn.Text = ">"
+toggleVisibilityBtn.TextColor3 = palette.white
+toggleVisibilityBtn.Font = Enum.Font.GothamBold
+toggleVisibilityBtn.TextSize = 15
+toggleVisibilityBtn.ZIndex = 31
+toggleVisibilityBtn.Parent = topDock
+round(toggleVisibilityBtn, 999)
+applyBWStroke(toggleVisibilityBtn, 1.2, 0.2)
+
+local hiddenAll = false
+local activeTabName = "Home"
+local lastTabName = "Home"
+local windowFullSize = UDim2.new(0, 384, 0, 268)
+local tabButtons = {}
+local tabWindows = {}
+
+local function makeDrag(handle, target)
+	local dragging = false
+	local dragInput
+	local dragStart = Vector2.zero
+	local startPos = target.Position
+
+	handle.InputBegan:Connect(function(input)
+		if dragging then return end
+		if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+			dragging = true
+			dragInput = input
+			dragStart = input.Position
+			startPos = target.Position
+		end
+	end)
+
+	UserInputService.InputChanged:Connect(function(input)
+		if dragging and input == dragInput then
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+				local scale = math.max(uiScale.Scale, 0.01)
+				local delta = (input.Position - dragStart) / scale
+				local vp = camera.ViewportSize / scale
+				local halfW = (target.Size.X.Offset * 0.5)
+				local halfH = (target.Size.Y.Offset * 0.5)
+
+				local rawX = startPos.X.Scale * vp.X + startPos.X.Offset + delta.X
+				local rawY = startPos.Y.Scale * vp.Y + startPos.Y.Offset + delta.Y
+
+				local clampedX = math.clamp(rawX, halfW, math.max(halfW, vp.X - halfW))
+				local clampedY = math.clamp(rawY, halfH + 36, math.max(halfH + 36, vp.Y - halfH))
+
+				target.Position = UDim2.new(0, clampedX, 0, clampedY)
+			end
+		end
+	end)
+
+	UserInputService.InputEnded:Connect(function(input)
+		if dragging and input == dragInput then
+			dragging = false
+			dragInput = nil
+		end
+	end)
+end
+
+local function createTabWindow(tabName)
+	local win = Instance.new("Frame")
+	win.Name = "Window_" .. tabName
+	win.Size = windowFullSize
+	win.Position = UDim2.new(0.5, 0, 0.57, 0)
+	win.AnchorPoint = Vector2.new(0.5, 0.5)
+	win.BackgroundColor3 = palette.panelBlack
+	win.BackgroundTransparency = 0.04
+	win.BorderSizePixel = 0
+	win.Visible = false
+	win.ClipsDescendants = true
+	win.ZIndex = 15
+	win.Parent = screenGui
+	round(win, 26)
+	local _, winGrad = applyBWStroke(win, 1.6, 0.1)
+	table.insert(animatedGradients, winGrad)
+
+	local haloStrip = Instance.new("Frame")
+	haloStrip.Size = UDim2.new(0.52, 0, 0, 2)
+	haloStrip.Position = UDim2.new(0.24, 0, 0, 48)
+	haloStrip.BackgroundColor3 = palette.white
+	haloStrip.BackgroundTransparency = 0.35
+	haloStrip.BorderSizePixel = 0
+	haloStrip.ZIndex = 16
+	haloStrip.Parent = win
+	round(haloStrip, 999)
+
+	local header = Instance.new("Frame")
+	header.Size = UDim2.new(1, 0, 0, 46)
+	header.BackgroundColor3 = palette.headerBlack
+	header.BackgroundTransparency = 0.15
+	header.BorderSizePixel = 0
+	header.ZIndex = 16
+	header.Parent = win
+	round(header, 26)
+	applyBWStroke(header, 1.2, 0.25)
+
+	local winLogo = Instance.new("ImageLabel")
+	winLogo.Size = UDim2.new(0, 20, 0, 20)
+	winLogo.Position = UDim2.new(0, 13, 0.5, -10)
+	winLogo.BackgroundTransparency = 1
+	winLogo.BorderSizePixel = 0
+	winLogo.Image = logoImage
+	winLogo.ScaleType = Enum.ScaleType.Fit
+	winLogo.ZIndex = 17
+	winLogo.Parent = header
+	round(winLogo, 999)
+
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(0.78, 0, 1, 0)
+	title.Position = UDim2.new(0, 38, 0, 0)
+	title.BackgroundTransparency = 1
+	title.Text = string.upper(tabName) .. " • DARKWARE"
+	title.TextColor3 = palette.white
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = 13
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextTruncate = Enum.TextTruncate.AtEnd
+	title.ZIndex = 17
+	title.Parent = header
+
+	local body = Instance.new("ScrollingFrame")
+	body.Name = tabName .. "Body"
+	body.Size = UDim2.new(1, -24, 1, -64)
+	body.Position = UDim2.new(0, 12, 0, 56)
+	body.BackgroundTransparency = 1
+	body.BorderSizePixel = 0
+	body.ScrollBarThickness = 2
+	body.ScrollBarImageColor3 = palette.white
+	body.CanvasSize = UDim2.new(0, 0, 0, 0)
+	body.AutomaticCanvasSize = Enum.AutomaticSize.Y
+	body.ZIndex = 16
+	body.Parent = win
+
+	local layout = Instance.new("UIListLayout")
+	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Parent = body
+
+	makeDrag(header, win)
+
+	local tabBtn = Instance.new("TextButton")
+	tabBtn.Name = "Tab_" .. tabName
+	tabBtn.Size = UDim2.new(0, 82, 0, 24)
+	tabBtn.BackgroundColor3 = palette.headerBlack
+	tabBtn.Text = tabName
+	tabBtn.TextColor3 = palette.white
+	tabBtn.Font = Enum.Font.GothamBold
+	tabBtn.TextSize = 10
+	tabBtn.TextTruncate = Enum.TextTruncate.AtEnd
+	tabBtn.ZIndex = 32
+	tabBtn.Parent = tabsContainer
+	round(tabBtn, 999)
+	applyBWStroke(tabBtn, 1.1, 0.25)
+
+	tabWindows[tabName] = win
+	tabButtons[tabName] = tabBtn
+	return win, body, tabBtn
+end
+
+local function refreshUIVisibility()
+	local anyOpen = (not hiddenAll) and (activeTabName ~= nil) and (tabWindows[activeTabName] ~= nil)
+	fxLayer.Visible = anyOpen
+	fovFrame.Visible = aimState.enabled
+	fovFrame.Size = UDim2.new(0, aimState.fovSize, 0, aimState.fovSize)
+
+	if hiddenAll then
+		tabsContainer.Visible = false
+		topDock.Visible = true
+		topDock.Size = UDim2.new(0, 152, 0, 40)
+		logoBadge.Position = UDim2.new(0, 7, 0.5, -14)
+		nameLabel.Position = UDim2.new(0, 40, 0, 4)
+		nameLabel.Size = UDim2.new(0, 68, 1, -8)
+		toggleVisibilityBtn.Text = "<"
+		toggleVisibilityBtn.BackgroundColor3 = palette.white
+		toggleVisibilityBtn.TextColor3 = palette.black
+		toggleVisibilityBtn.Size = UDim2.new(0, 32, 1, -8)
+		toggleVisibilityBtn.Position = UDim2.new(1, -37, 0, 4)
+	else
+		tabsContainer.Visible = true
+		topDock.Visible = anyOpen
+		topDock.Size = UDim2.new(0, 344, 0, 44)
+		logoBadge.Position = UDim2.new(0, 8, 0.5, -14)
+		nameLabel.Position = UDim2.new(0, 41, 0, 5)
+		nameLabel.Size = UDim2.new(0, 62, 1, -10)
+		toggleVisibilityBtn.Text = ">"
+		toggleVisibilityBtn.BackgroundColor3 = palette.headerBlack
+		toggleVisibilityBtn.TextColor3 = palette.white
+		toggleVisibilityBtn.Size = UDim2.new(0, 34, 1, -10)
+		toggleVisibilityBtn.Position = UDim2.new(1, -40, 0, 5)
+	end
+
+	for name, btn in pairs(tabButtons) do
+		local selected = anyOpen and (name == activeTabName)
+		TweenService:Create(btn, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundColor3 = selected and palette.white or palette.headerBlack,
+			TextColor3 = selected and palette.black or palette.white
+		}):Play()
+	end
+end
+
+local function openTab(name)
+	local targetWin = tabWindows[name]
+	if not targetWin then return end
+
+	hiddenAll = false
+	activeTabName = name
+	lastTabName = name
+
+	for otherName, win in pairs(tabWindows) do
+		win.Visible = (otherName == name)
+	end
+
+	targetWin.Size = UDim2.new(0, windowFullSize.X.Offset, 0, 0)
+	TweenService:Create(targetWin, TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		Size = windowFullSize
+	}):Play()
+
+	refreshUIVisibility()
+end
+
+-- Aba 1: Home
+local _, homeBody, homeTabBtn = createTabWindow("Home")
+homeTabBtn.MouseButton1Click:Connect(function()
+	openTab("Home")
+end)
+
+local statusCard = Instance.new("Frame")
+statusCard.Name = "StatusCard"
+statusCard.Size = UDim2.new(1, 0, 0, 96)
+statusCard.BackgroundColor3 = palette.cardBlack
+statusCard.BackgroundTransparency = 0.08
+statusCard.BorderSizePixel = 0
+statusCard.LayoutOrder = 1
+statusCard.ZIndex = 17
+statusCard.Parent = homeBody
+round(statusCard, 18)
+applyBWStroke(statusCard, 1.2, 0.25)
+
+local statusTitle = Instance.new("TextLabel")
+statusTitle.Size = UDim2.new(1, -24, 0, 20)
+statusTitle.Position = UDim2.new(0, 12, 0, 8)
+statusTitle.BackgroundTransparency = 1
+statusTitle.Text = "Status"
+statusTitle.TextColor3 = palette.white
+statusTitle.Font = Enum.Font.GothamBold
+statusTitle.TextSize = 14
+statusTitle.TextXAlignment = Enum.TextXAlignment.Center
+statusTitle.ZIndex = 18
+statusTitle.Parent = statusCard
+
+local fpsPingLine = Instance.new("TextLabel")
+fpsPingLine.Size = UDim2.new(1, -24, 0, 18)
+fpsPingLine.Position = UDim2.new(0, 12, 0, 32)
+fpsPingLine.BackgroundTransparency = 1
+fpsPingLine.Text = "Fps | 60  Ping | 45"
+fpsPingLine.TextColor3 = palette.white
+fpsPingLine.Font = Enum.Font.GothamBold
+fpsPingLine.TextSize = 12
+fpsPingLine.TextXAlignment = Enum.TextXAlignment.Left
+fpsPingLine.TextTruncate = Enum.TextTruncate.AtEnd
+fpsPingLine.ZIndex = 18
+fpsPingLine.Parent = statusCard
+
+local playersLine = Instance.new("TextLabel")
+playersLine.Size = UDim2.new(1, -24, 0, 18)
+playersLine.Position = UDim2.new(0, 12, 0, 52)
+playersLine.BackgroundTransparency = 1
+playersLine.Text = "Players | 1/12"
+playersLine.TextColor3 = palette.muted
+playersLine.Font = Enum.Font.GothamBold
+playersLine.TextSize = 12
+playersLine.TextXAlignment = Enum.TextXAlignment.Left
+playersLine.TextTruncate = Enum.TextTruncate.AtEnd
+playersLine.ZIndex = 18
+playersLine.Parent = statusCard
+
+local myTeamLine = Instance.new("TextLabel")
+myTeamLine.Size = UDim2.new(1, -24, 0, 18)
+myTeamLine.Position = UDim2.new(0, 12, 0, 72)
+myTeamLine.BackgroundTransparency = 1
+myTeamLine.Text = "My Team | Pirates"
+myTeamLine.TextColor3 = palette.white
+myTeamLine.Font = Enum.Font.GothamBold
+myTeamLine.TextSize = 12
+myTeamLine.TextXAlignment = Enum.TextXAlignment.Left
+myTeamLine.TextTruncate = Enum.TextTruncate.AtEnd
+myTeamLine.ZIndex = 18
+myTeamLine.Parent = statusCard
+
+local targetCard = Instance.new("Frame")
+targetCard.Name = "TargetCard"
+targetCard.Size = UDim2.new(1, 0, 0, 84)
+targetCard.BackgroundColor3 = palette.cardBlack
+targetCard.BackgroundTransparency = 0.08
+targetCard.BorderSizePixel = 0
+targetCard.LayoutOrder = 2
+targetCard.ZIndex = 17
+targetCard.Parent = homeBody
+round(targetCard, 18)
+applyBWStroke(targetCard, 1.2, 0.25)
+
+local targetTitle = Instance.new("TextLabel")
+targetTitle.Size = UDim2.new(1, -24, 0, 20)
+targetTitle.Position = UDim2.new(0, 12, 0, 8)
+targetTitle.BackgroundTransparency = 1
+targetTitle.Text = "Target Card"
+targetTitle.TextColor3 = palette.white
+targetTitle.Font = Enum.Font.GothamBold
+targetTitle.TextSize = 14
+targetTitle.TextXAlignment = Enum.TextXAlignment.Center
+targetTitle.ZIndex = 18
+targetTitle.Parent = targetCard
+
+local targetNameLine = Instance.new("TextLabel")
+targetNameLine.Size = UDim2.new(1, -24, 0, 18)
+targetNameLine.Position = UDim2.new(0, 12, 0, 32)
+targetNameLine.BackgroundTransparency = 1
+targetNameLine.Text = "Target | None"
+targetNameLine.TextColor3 = palette.white
+targetNameLine.Font = Enum.Font.GothamBold
+targetNameLine.TextSize = 12
+targetNameLine.TextXAlignment = Enum.TextXAlignment.Left
+targetNameLine.TextTruncate = Enum.TextTruncate.AtEnd
+targetNameLine.ZIndex = 18
+targetNameLine.Parent = targetCard
+
+local targetInfoLine = Instance.new("TextLabel")
+targetInfoLine.Size = UDim2.new(1, -24, 0, 18)
+targetInfoLine.Position = UDim2.new(0, 12, 0, 54)
+targetInfoLine.BackgroundTransparency = 1
+targetInfoLine.Text = "HP | --  Dist | --"
+targetInfoLine.TextColor3 = palette.muted
+targetInfoLine.Font = Enum.Font.GothamBold
+targetInfoLine.TextSize = 12
+targetInfoLine.TextXAlignment = Enum.TextXAlignment.Left
+targetInfoLine.TextTruncate = Enum.TextTruncate.AtEnd
+targetInfoLine.ZIndex = 18
+targetInfoLine.Parent = targetCard
+
+-- Aba 2: Combat
+local _, combatBody, combatTabBtn = createTabWindow("Combat")
+combatTabBtn.MouseButton1Click:Connect(function()
+	openTab("Combat")
+end)
+
+local combatStatusCard = Instance.new("Frame")
+combatStatusCard.Name = "CombatStatusCard"
+combatStatusCard.Size = UDim2.new(1, 0, 0, 56)
+combatStatusCard.BackgroundColor3 = palette.cardBlack
+combatStatusCard.BackgroundTransparency = 0.08
+combatStatusCard.BorderSizePixel = 0
+combatStatusCard.LayoutOrder = 1
+combatStatusCard.ZIndex = 17
+combatStatusCard.Parent = combatBody
+round(combatStatusCard, 18)
+applyBWStroke(combatStatusCard, 1.2, 0.25)
+
+local combatStatusTitle = Instance.new("TextLabel")
+combatStatusTitle.Size = UDim2.new(1, -24, 0, 18)
+combatStatusTitle.Position = UDim2.new(0, 12, 0, 6)
+combatStatusTitle.BackgroundTransparency = 1
+combatStatusTitle.Text = "Status"
+combatStatusTitle.TextColor3 = palette.white
+combatStatusTitle.Font = Enum.Font.GothamBold
+combatStatusTitle.TextSize = 13
+combatStatusTitle.TextXAlignment = Enum.TextXAlignment.Center
+combatStatusTitle.ZIndex = 18
+combatStatusTitle.Parent = combatStatusCard
+
+local combatStatusLine = Instance.new("TextLabel")
+combatStatusLine.Size = UDim2.new(1, -24, 0, 18)
+combatStatusLine.Position = UDim2.new(0, 12, 0, 28)
+combatStatusLine.BackgroundTransparency = 1
+combatStatusLine.Text = "Aim | OFF  Mode | Nearest  FOV | 160"
+combatStatusLine.TextColor3 = palette.muted
+combatStatusLine.Font = Enum.Font.GothamBold
+combatStatusLine.TextSize = 11
+combatStatusLine.TextXAlignment = Enum.TextXAlignment.Left
+combatStatusLine.TextTruncate = Enum.TextTruncate.AtEnd
+combatStatusLine.ZIndex = 18
+combatStatusLine.Parent = combatStatusCard
+
+local function refreshCombatStatusLabel()
+	combatStatusLine.Text = string.format(
+		"Aim | %s  Mode | %s  FOV | %d",
+		aimState.enabled and "ON" or "OFF",
+		aimState.mode,
+		aimState.fovSize
+	)
+end
+
+local aimCard = Instance.new("TextButton")
+aimCard.Name = "AimToggleCard"
+aimCard.Size = UDim2.new(1, 0, 0, 44)
+aimCard.BackgroundColor3 = palette.cardBlack
+aimCard.BackgroundTransparency = 0.08
+aimCard.Text = ""
+aimCard.AutoButtonColor = false
+aimCard.LayoutOrder = 2
+aimCard.ZIndex = 17
+aimCard.Parent = combatBody
+round(aimCard, 18)
+local aimStroke = applyBWStroke(aimCard, 1.2, 0.35)
+
+local aimLbl = Instance.new("TextLabel")
+aimLbl.Size = UDim2.new(0.55, 0, 1, 0)
+aimLbl.Position = UDim2.new(0, 14, 0, 0)
+aimLbl.BackgroundTransparency = 1
+aimLbl.Text = "Aim"
+aimLbl.TextColor3 = palette.white
+aimLbl.Font = Enum.Font.GothamBold
+aimLbl.TextSize = 13
+aimLbl.TextXAlignment = Enum.TextXAlignment.Left
+aimLbl.ZIndex = 18
+aimLbl.Parent = aimCard
+
+local aimBadge = Instance.new("TextLabel")
+aimBadge.Size = UDim2.new(0, 74, 0, 24)
+aimBadge.Position = UDim2.new(1, -88, 0.5, -12)
+aimBadge.BackgroundColor3 = palette.headerBlack
+aimBadge.Text = "OFF"
+aimBadge.TextColor3 = palette.muted
+aimBadge.Font = Enum.Font.GothamBold
+aimBadge.TextSize = 11
+aimBadge.ZIndex = 18
+aimBadge.Parent = aimCard
+round(aimBadge, 999)
+applyBWStroke(aimBadge, 1.1, 0.25)
+
+aimCard.MouseButton1Click:Connect(function()
+	aimState.enabled = not aimState.enabled
+	if aimState.enabled then
+		aimBadge.Text = "ON"
+		aimBadge.BackgroundColor3 = palette.white
+		aimBadge.TextColor3 = palette.black
+		aimStroke.Transparency = 0.08
+	else
+		aimBadge.Text = "OFF"
+		aimBadge.BackgroundColor3 = palette.headerBlack
+		aimBadge.TextColor3 = palette.muted
+		aimStroke.Transparency = 0.35
+		currentTargetPlayer = nil
+	end
+	fovFrame.Visible = aimState.enabled
+	refreshCombatStatusLabel()
+end)
+
+local modeOptions = {"Nearest"}
+local modeIndex = 1
+
+local modeCard = Instance.new("TextButton")
+modeCard.Name = "AimModeCard"
+modeCard.Size = UDim2.new(1, 0, 0, 44)
+modeCard.BackgroundColor3 = palette.cardBlack
+modeCard.BackgroundTransparency = 0.08
+modeCard.Text = ""
+modeCard.AutoButtonColor = false
+modeCard.LayoutOrder = 3
+modeCard.ZIndex = 17
+modeCard.Parent = combatBody
+round(modeCard, 18)
+applyBWStroke(modeCard, 1.2, 0.3)
+
+local modeLbl = Instance.new("TextLabel")
+modeLbl.Size = UDim2.new(0.45, 0, 1, 0)
+modeLbl.Position = UDim2.new(0, 14, 0, 0)
+modeLbl.BackgroundTransparency = 1
+modeLbl.Text = "Aim Target"
+modeLbl.TextColor3 = palette.white
+modeLbl.Font = Enum.Font.GothamBold
+modeLbl.TextSize = 13
+modeLbl.TextXAlignment = Enum.TextXAlignment.Left
+modeLbl.ZIndex = 18
+modeLbl.Parent = modeCard
+
+local modeValue = Instance.new("TextLabel")
+modeValue.Size = UDim2.new(0, 142, 0, 26)
+modeValue.Position = UDim2.new(1, -156, 0.5, -13)
+modeValue.BackgroundColor3 = palette.headerBlack
+modeValue.Text = "Nearest"
+modeValue.TextColor3 = palette.white
+modeValue.Font = Enum.Font.GothamBold
+modeValue.TextSize = 11
+modeValue.TextTruncate = Enum.TextTruncate.AtEnd
+modeValue.ZIndex = 18
+modeValue.Parent = modeCard
+round(modeValue, 999)
+applyBWStroke(modeValue, 1.1, 0.25)
+
+local function rebuildAimModes()
+	local previous = aimState.mode
+	modeOptions = {"Nearest"}
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr ~= player then
+			table.insert(modeOptions, plr.Name)
+		end
+	end
+
+	modeIndex = 1
+	for i, opt in ipairs(modeOptions) do
+		if opt == previous then
+			modeIndex = i
+			break
+		end
+	end
+
+	aimState.mode = modeOptions[modeIndex] or "Nearest"
+	modeValue.Text = aimState.mode
+	refreshCombatStatusLabel()
+end
+
+modeCard.MouseButton1Click:Connect(function()
+	if #modeOptions == 0 then
+		rebuildAimModes()
+		return
+	end
+	modeIndex = (modeIndex % #modeOptions) + 1
+	aimState.mode = modeOptions[modeIndex]
+	modeValue.Text = aimState.mode
+	refreshCombatStatusLabel()
+end)
+
+Players.PlayerAdded:Connect(rebuildAimModes)
+Players.PlayerRemoving:Connect(rebuildAimModes)
+rebuildAimModes()
+
+local fovSizes = {110, 160, 220, 280}
+local fovIndex = 2
+
+local fovCard = Instance.new("TextButton")
+fovCard.Name = "FovSizeCard"
+fovCard.Size = UDim2.new(1, 0, 0, 44)
+fovCard.BackgroundColor3 = palette.cardBlack
+fovCard.BackgroundTransparency = 0.08
+fovCard.Text = ""
+fovCard.AutoButtonColor = false
+fovCard.LayoutOrder = 4
+fovCard.ZIndex = 17
+fovCard.Parent = combatBody
+round(fovCard, 18)
+applyBWStroke(fovCard, 1.2, 0.3)
+
+local fovLbl = Instance.new("TextLabel")
+fovLbl.Size = UDim2.new(0.45, 0, 1, 0)
+fovLbl.Position = UDim2.new(0, 14, 0, 0)
+fovLbl.BackgroundTransparency = 1
+fovLbl.Text = "FOV"
+fovLbl.TextColor3 = palette.white
+fovLbl.Font = Enum.Font.GothamBold
+fovLbl.TextSize = 13
+fovLbl.TextXAlignment = Enum.TextXAlignment.Left
+fovLbl.ZIndex = 18
+fovLbl.Parent = fovCard
+
+local fovValue = Instance.new("TextLabel")
+fovValue.Size = UDim2.new(0, 110, 0, 26)
+fovValue.Position = UDim2.new(1, -124, 0.5, -13)
+fovValue.BackgroundColor3 = palette.headerBlack
+fovValue.Text = tostring(aimState.fovSize)
+fovValue.TextColor3 = palette.white
+fovValue.Font = Enum.Font.GothamBold
+fovValue.TextSize = 11
+fovValue.ZIndex = 18
+fovValue.Parent = fovCard
+round(fovValue, 999)
+applyBWStroke(fovValue, 1.1, 0.25)
+
+fovCard.MouseButton1Click:Connect(function()
+	fovIndex = (fovIndex % #fovSizes) + 1
+	aimState.fovSize = fovSizes[fovIndex]
+	fovValue.Text = tostring(aimState.fovSize)
+	fovFrame.Size = UDim2.new(0, aimState.fovSize, 0, aimState.fovSize)
+	refreshCombatStatusLabel()
+end)
+
+local function isValidEnemyCharacter(plr)
+	if not plr or plr == player or not plr.Character then
+		return nil
+	end
+	local hum = plr.Character:FindFirstChildOfClass("Humanoid")
+	local part = plr.Character:FindFirstChild("HumanoidRootPart") or plr.Character:FindFirstChild("Head")
+	if hum and hum.Health > 0 and part and part:IsA("BasePart") then
+		return part
+	end
+	return nil
+end
+
+local function resolveBasicAimTarget()
+	if aimState.mode ~= "Nearest" then
+		local chosenPlr = Players:FindFirstChild(aimState.mode)
+		local part = isValidEnemyCharacter(chosenPlr)
+		if part then
+			return chosenPlr, part
+		end
+		return nil, nil
+	end
+
+	local vp = camera.ViewportSize
+	local center = Vector2.new(vp.X * 0.5, vp.Y * 0.5)
+	local maxRadius = aimState.fovSize * 0.5
+	local bestPlr = nil
+	local bestPart = nil
+	local bestScore = maxRadius
+
+	for _, plr in ipairs(Players:GetPlayers()) do
+		local part = isValidEnemyCharacter(plr)
+		if part then
+			local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
+			if onScreen and screenPos.Z > 0 then
+				local screenDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+				if screenDist <= bestScore then
+					bestScore = screenDist
+					bestPlr = plr
+					bestPart = part
+				end
+			end
+		end
+	end
+
+	return bestPlr, bestPart
+end
+
+local function applyLightAim(targetPart, dt)
+	if not aimState.enabled or not targetPart or not targetPart.Parent then
+		return
+	end
+	local camPos = camera.CFrame.Position
+	local desiredCf = CFrame.lookAt(camPos, targetPart.Position)
+	local alpha = math.clamp(dt * 8.5, 0.04, 0.25)
+	camera.CFrame = camera.CFrame:Lerp(desiredCf, alpha)
+end
+
+local function getSingleFactionText()
+	local team = player.Team
+	if not team then
+		return "Neutral"
+	end
+	local lowerName = string.lower(team.Name)
+	if string.find(lowerName, "marine", 1, true) then
+		return "Marines"
+	end
+	if string.find(lowerName, "pirate", 1, true) then
+		return "Pirates"
+	end
+	return team.Name
+end
+
+local function getPingMs()
+	local pingValue = 0
+	pcall(function()
+		local netItem = Stats.Network and Stats.Network:FindFirstChild("ServerStatsItem")
+		local dataPing = netItem and netItem:FindFirstChild("Data Ping")
+		if dataPing then
+			pingValue = tonumber(dataPing:GetValue()) or 0
+		end
+	end)
+	if pingValue <= 0 then
+		pcall(function()
+			pingValue = (player:GetNetworkPing() or 0) * 1000
+		end)
+	end
+	return math.clamp(math.floor(pingValue + 0.5), 1, 999)
+end
+
+local function updateStatusAndTarget(fpsValue)
+	local currentPlayers = #Players:GetPlayers()
+	local maxPlayers = math.max(Players.MaxPlayers or 12, currentPlayers)
+	local pingMs = getPingMs()
+	local faction = getSingleFactionText()
+
+	fpsPingLine.Text = string.format("Fps | %d  Ping | %d", fpsValue, pingMs)
+	playersLine.Text = string.format("Players | %d/%d", currentPlayers, maxPlayers)
+	myTeamLine.Text = "My Team | " .. faction
+
+	local targetPlr = currentTargetPlayer
+	if not targetPlr and aimState.mode ~= "Nearest" then
+		targetPlr = Players:FindFirstChild(aimState.mode)
+	end
+
+	if targetPlr and targetPlr:IsA("Player") and targetPlr ~= player and targetPlr.Character then
+		local hum = targetPlr.Character:FindFirstChildOfClass("Humanoid")
+		local root = targetPlr.Character:FindFirstChild("HumanoidRootPart") or targetPlr.Character:FindFirstChild("Head")
+		local myRoot = player.Character and (player.Character:FindFirstChild("HumanoidRootPart") or player.Character:FindFirstChild("Head"))
+
+		local hpText = "--"
+		if hum then
+			hpText = string.format("%d/%d", math.max(0, math.floor(hum.Health)), math.max(1, math.floor(hum.MaxHealth)))
+		end
+
+		local distText = "--"
+		if root and myRoot and root:IsA("BasePart") and myRoot:IsA("BasePart") then
+			distText = string.format("%dm", math.floor((root.Position - myRoot.Position).Magnitude))
+		end
+
+		targetNameLine.Text = "Target | " .. targetPlr.Name
+		targetInfoLine.Text = string.format("HP | %s  Dist | %s", hpText, distText)
+	else
+		targetNameLine.Text = "Target | None"
+		targetInfoLine.Text = "HP | --  Dist | --"
+	end
+end
+
+toggleVisibilityBtn.MouseButton1Click:Connect(function()
+	if hiddenAll then
+		openTab(lastTabName or "Home")
+	else
+		if activeTabName then
+			lastTabName = activeTabName
+		end
+		activeTabName = nil
+		hiddenAll = true
+		for _, win in pairs(tabWindows) do
+			win.Visible = false
+		end
+		refreshUIVisibility()
+	end
+end)
+
+local elapsedTime = 0
+local statsTimer = 0
+local frameCounter = 0
+local cachedFps = 60
+local renderConn
+renderConn = RunService.RenderStepped:Connect(function(dt)
+	if not screenGui.Parent then
+		renderConn:Disconnect()
+		return
+	end
+
+	elapsedTime += dt
+	statsTimer += dt
+	frameCounter += 1
+
+	for _, grad in ipairs(animatedGradients) do
+		grad.Rotation = (grad.Rotation + dt * 135) % 360
+	end
+
+	if fxLayer.Visible then
+		for _, d in ipairs(rainDrops) do
+			d.y += dt * d.speed
+			d.x -= dt * d.speed * 0.12
+			if d.y > 1.05 then d.y = -0.05 end
+			if d.x < -0.02 then d.x = 1.02 end
+			d.frame.Position = UDim2.new(d.x, 0, d.y, 0)
+		end
+
+		for _, s in ipairs(stars) do
+			s.frame.BackgroundTransparency = 0.25 + 0.45 * (0.5 + 0.5 * math.sin(elapsedTime * s.speed + s.phase))
+		end
+	end
+
+	if aimState.enabled then
+		local plr, part = resolveBasicAimTarget()
+		currentTargetPlayer = plr
+		if part then
+			applyLightAim(part, dt)
+		end
+	else
+		currentTargetPlayer = nil
+	end
+
+	if statsTimer >= 0.25 then
+		cachedFps = math.clamp(math.floor((frameCounter / statsTimer) + 0.5), 1, 999)
+		frameCounter = 0
+		statsTimer = 0
+		updateStatusAndTarget(cachedFps)
+	end
+end)
+
+task.spawn(function()
+	local totalDuration = 9
+	local sprintStart = 8.15
+	local elapsed = 0
+
+	while elapsed < totalDuration do
+		local dt = RunService.RenderStepped:Wait()
+		elapsed = math.min(totalDuration, elapsed + dt)
+
+		local pct
+		if elapsed < sprintStart then
+			local preT = elapsed / sprintStart
+			pct = math.floor(1 + (preT ^ 1.35) * 71)
+		else
+			local sprintT = (elapsed - sprintStart) / (totalDuration - sprintStart)
+			local easedSprint = 1 - ((1 - sprintT) ^ 2.4)
+			pct = math.floor(72 + easedSprint * 28)
+		end
+
+		pct = math.clamp(pct, 1, 100)
+		introPercent.Text = tostring(pct) .. "%"
+		introBar.Size = UDim2.new(pct / 100, 0, 1, 0)
+	end
+
+	introPercent.Text = "100%"
+	introBar.Size = UDim2.new(1, 0, 1, 0)
+	task.wait(0.35)
+
+	TweenService:Create(introFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		BackgroundTransparency = 1
+	}):Play()
+	TweenService:Create(introTitle, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		TextTransparency = 1
+	}):Play()
+	TweenService:Create(introPercent, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+		TextTransparency = 1
+	}):Play()
+	TweenService:Create(introTrack, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+		BackgroundTransparency = 1
+	}):Play()
+	TweenService:Create(introBar, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+		BackgroundTransparency = 1
+	}):Play()
+
+	task.wait(0.25)
+	introFrame.Visible = false
+	openTab("Home")
+end)
