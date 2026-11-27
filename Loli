@@ -6,6 +6,7 @@ local Stats = game:GetService("Stats")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
+local mouse = player:GetMouse()
 local parentGui = (gethui and gethui()) or game:GetService("CoreGui") or player:WaitForChild("PlayerGui")
 
 if parentGui:FindFirstChild("UI_DarkWare") then
@@ -103,10 +104,10 @@ fxLayer.ZIndex = 2
 fxLayer.Parent = screenGui
 
 local rainDrops = {}
-for i = 1, 16 do
+for i = 1, 14 do
 	local drop = Instance.new("Frame")
 	drop.Size = UDim2.new(0, 2, 0, 14 + (i % 3) * 4)
-	drop.Position = UDim2.new((i * 0.061) % 1, 0, (i * 0.089) % 1, 0)
+	drop.Position = UDim2.new((i * 0.067) % 1, 0, (i * 0.097) % 1, 0)
 	drop.BackgroundColor3 = palette.white
 	drop.BackgroundTransparency = 0.55
 	drop.BorderSizePixel = 0
@@ -114,18 +115,18 @@ for i = 1, 16 do
 	round(drop, 999)
 	table.insert(rainDrops, {
 		frame = drop,
-		x = (i * 0.061) % 1,
-		y = (i * 0.089) % 1,
+		x = (i * 0.067) % 1,
+		y = (i * 0.097) % 1,
 		speed = 0.75 + (i % 3) * 0.2
 	})
 end
 
 local stars = {}
-for i = 1, 10 do
+for i = 1, 8 do
 	local st = Instance.new("Frame")
 	local sz = (i % 3 == 0) and 3 or 2
 	st.Size = UDim2.new(0, sz, 0, sz)
-	st.Position = UDim2.new((i * 0.093) % 1, 0, (i * 0.113) % 1, 0)
+	st.Position = UDim2.new((i * 0.113) % 1, 0, (i * 0.137) % 1, 0)
 	st.BackgroundColor3 = palette.white
 	st.BackgroundTransparency = 0.35
 	st.BorderSizePixel = 0
@@ -298,7 +299,7 @@ local function makeDrag(handle, target)
 
 	UserInputService.InputChanged:Connect(function(input)
 		if dragging and input == dragInput then
-			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType.MouseMovement then
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
 				local scale = math.max(uiScale.Scale, 0.01)
 				local delta = (input.Position - dragStart) / scale
 				local vp = camera.ViewportSize / scale
@@ -485,6 +486,7 @@ local function openTab(name)
 	refreshUIVisibility()
 end
 
+-- Tab 1: Home
 local _, homeBody, homeTabBtn = createTabWindow("Home")
 homeTabBtn.MouseButton1Click:Connect(function()
 	openTab("Home")
@@ -603,6 +605,7 @@ targetInfoLine.TextTruncate = Enum.TextTruncate.AtEnd
 targetInfoLine.ZIndex = 18
 targetInfoLine.Parent = targetCard
 
+-- Tab 2: Combat (ordem limpa: Status -> Silent Aim -> Aim Target -> FOV)
 local _, combatBody, combatTabBtn = createTabWindow("Combat")
 combatTabBtn.MouseButton1Click:Connect(function()
 	openTab("Combat")
@@ -839,12 +842,22 @@ fovCard.MouseButton1Click:Connect(function()
 	refreshCombatStatusLabel()
 end)
 
-local function isValidEnemyCharacter(plr)
+local function isSameTeam(plr)
+	if not player.Team or not plr.Team then
+		return false
+	end
+	return player.Team == plr.Team
+end
+
+local function isValidBloxFruitsTarget(plr)
 	if not plr or plr == player or not plr.Character then
 		return nil
 	end
+	if isSameTeam(plr) then
+		return nil
+	end
 	local hum = plr.Character:FindFirstChildOfClass("Humanoid")
-	local part = plr.Character:FindFirstChild("HumanoidRootPart") or plr.Character:FindFirstChild("Head")
+	local part = plr.Character:FindFirstChild("HumanoidRootPart") or plr.Character:FindFirstChild("UpperTorso") or plr.Character:FindFirstChild("Head")
 	if hum and hum.Health > 0 and part and part:IsA("BasePart") then
 		return part
 	end
@@ -854,7 +867,7 @@ end
 local function resolveSilentAimTarget()
 	if aimState.mode ~= "Nearest" then
 		local chosenPlr = Players:FindFirstChild(aimState.mode)
-		local part = isValidEnemyCharacter(chosenPlr)
+		local part = isValidBloxFruitsTarget(chosenPlr)
 		if part then
 			return chosenPlr, part
 		end
@@ -869,7 +882,7 @@ local function resolveSilentAimTarget()
 	local bestScore = maxRadius
 
 	for _, plr in ipairs(Players:GetPlayers()) do
-		local part = isValidEnemyCharacter(plr)
+		local part = isValidBloxFruitsTarget(plr)
 		if part then
 			local screenPos, onScreen = camera:WorldToViewportPoint(part.Position)
 			if onScreen and screenPos.Z > 0 then
@@ -885,6 +898,60 @@ local function resolveSilentAimTarget()
 
 	return bestPlr, bestPart
 end
+
+-- Redirecionamento seguro para ataques/habilidades baseados em Mouse e Raycast de workspace (sem mover câmera nem WalkSpeed)
+local hooksInstalled = false
+local function installBloxFruitsSilentHooks()
+	if hooksInstalled then return end
+	if not hookmetamethod or not getnamecallmethod then return end
+	hooksInstalled = true
+
+	pcall(function()
+		local oldNamecall
+		oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+			if aimState.enabled and currentTargetPart and currentTargetPart.Parent then
+				local method = getnamecallmethod()
+				local targetPos = currentTargetPart.Position
+
+				if method == "Raycast" and self == workspace then
+					local args = {...}
+					if typeof(args[1]) == "Vector3" then
+						args[2] = (targetPos - args[1]).Unit * 1000
+						return oldNamecall(self, table.unpack(args))
+					end
+				elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+					local args = {...}
+					if typeof(args[1]) == "Ray" then
+						local origin = args[1].Origin
+						args[1] = Ray.new(origin, (targetPos - origin).Unit * 1000)
+						return oldNamecall(self, table.unpack(args))
+					end
+				end
+			end
+			return oldNamecall(self, ...)
+		end)
+
+		if mouse then
+			local oldIndex
+			oldIndex = hookmetamethod(game, "__index", function(self, key)
+				if aimState.enabled and currentTargetPart and currentTargetPart.Parent and self == mouse then
+					local targetPos = currentTargetPart.Position
+					if key == "Hit" then
+						return CFrame.new(targetPos)
+					elseif key == "Target" then
+						return currentTargetPart
+					elseif key == "UnitRay" then
+						local origin = camera.CFrame.Position
+						return Ray.new(origin, (targetPos - origin).Unit)
+					end
+				end
+				return oldIndex(self, key)
+			end)
+		end
+	end)
+end
+
+task.defer(installBloxFruitsSilentHooks)
 
 local function getSingleFactionText()
 	local team = player.Team
