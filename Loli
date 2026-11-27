@@ -6,7 +6,6 @@ local Stats = game:GetService("Stats")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
-local mouse = player:GetMouse()
 local parentGui = (gethui and gethui()) or game:GetService("CoreGui") or player:WaitForChild("PlayerGui")
 
 if parentGui:FindFirstChild("UI_DarkWare") then
@@ -104,10 +103,10 @@ fxLayer.ZIndex = 2
 fxLayer.Parent = screenGui
 
 local rainDrops = {}
-for i = 1, 24 do
+for i = 1, 16 do
 	local drop = Instance.new("Frame")
-	drop.Size = UDim2.new(0, 2, 0, 16 + (i % 3) * 5)
-	drop.Position = UDim2.new((i * 0.041) % 1, 0, (i * 0.073) % 1, 0)
+	drop.Size = UDim2.new(0, 2, 0, 14 + (i % 3) * 4)
+	drop.Position = UDim2.new((i * 0.061) % 1, 0, (i * 0.089) % 1, 0)
 	drop.BackgroundColor3 = palette.white
 	drop.BackgroundTransparency = 0.55
 	drop.BorderSizePixel = 0
@@ -115,18 +114,18 @@ for i = 1, 24 do
 	round(drop, 999)
 	table.insert(rainDrops, {
 		frame = drop,
-		x = (i * 0.041) % 1,
-		y = (i * 0.073) % 1,
-		speed = 0.8 + (i % 4) * 0.2
+		x = (i * 0.061) % 1,
+		y = (i * 0.089) % 1,
+		speed = 0.75 + (i % 3) * 0.2
 	})
 end
 
 local stars = {}
-for i = 1, 14 do
+for i = 1, 10 do
 	local st = Instance.new("Frame")
-	local sz = (i % 3 == 0) and 4 or 2
+	local sz = (i % 3 == 0) and 3 or 2
 	st.Size = UDim2.new(0, sz, 0, sz)
-	st.Position = UDim2.new((i * 0.067) % 1, 0, (i * 0.097) % 1, 0)
+	st.Position = UDim2.new((i * 0.093) % 1, 0, (i * 0.113) % 1, 0)
 	st.BackgroundColor3 = palette.white
 	st.BackgroundTransparency = 0.35
 	st.BorderSizePixel = 0
@@ -135,7 +134,7 @@ for i = 1, 14 do
 	table.insert(stars, {
 		frame = st,
 		phase = i * 0.7,
-		speed = 1.5 + (i % 3) * 0.4
+		speed = 1.4 + (i % 3) * 0.35
 	})
 end
 
@@ -299,7 +298,7 @@ local function makeDrag(handle, target)
 
 	UserInputService.InputChanged:Connect(function(input)
 		if dragging and input == dragInput then
-			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement then
+			if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType.MouseMovement then
 				local scale = math.max(uiScale.Scale, 0.01)
 				local delta = (input.Position - dragStart) / scale
 				local vp = camera.ViewportSize / scale
@@ -486,7 +485,6 @@ local function openTab(name)
 	refreshUIVisibility()
 end
 
--- Aba 1: Home
 local _, homeBody, homeTabBtn = createTabWindow("Home")
 homeTabBtn.MouseButton1Click:Connect(function()
 	openTab("Home")
@@ -514,7 +512,6 @@ statusTitle.Font = Enum.Font.GothamBold
 statusTitle.TextSize = 14
 statusTitle.TextXAlignment = Enum.TextXAlignment.Center
 statusTitle.ZIndex = 18
-statusCard.Parent = homeBody
 statusTitle.Parent = statusCard
 
 local fpsPingLine = Instance.new("TextLabel")
@@ -606,7 +603,6 @@ targetInfoLine.TextTruncate = Enum.TextTruncate.AtEnd
 targetInfoLine.ZIndex = 18
 targetInfoLine.Parent = targetCard
 
--- Aba 2: Combat
 local _, combatBody, combatTabBtn = createTabWindow("Combat")
 combatTabBtn.MouseButton1Click:Connect(function()
 	openTab("Combat")
@@ -890,53 +886,6 @@ local function resolveSilentAimTarget()
 	return bestPlr, bestPart
 end
 
--- Silent Aim real sem mover a câmera nem alterar o movimento do personagem
-pcall(function()
-	if not hookmetamethod or not getnamecallmethod then return end
-
-	local oldNamecall
-	oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
-		if aimState.enabled and currentTargetPart and currentTargetPart.Parent then
-			local method = getnamecallmethod()
-			local targetPos = currentTargetPart.Position
-
-			if method == "Raycast" and self == workspace then
-				local args = {...}
-				if typeof(args[1]) == "Vector3" then
-					args[2] = (targetPos - args[1]).Unit * 1000
-					return oldNamecall(self, table.unpack(args))
-				end
-			elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
-				local args = {...}
-				if typeof(args[1]) == "Ray" then
-					local origin = args[1].Origin
-					args[1] = Ray.new(origin, (targetPos - origin).Unit * 1000)
-					return oldNamecall(self, table.unpack(args))
-				end
-			end
-		end
-		return oldNamecall(self, ...)
-	end)
-
-	if newcclosure and hookfunction and mouse then
-		local oldIndex
-		oldIndex = hookmetamethod(game, "__index", function(self, key)
-			if aimState.enabled and currentTargetPart and currentTargetPart.Parent and self == mouse then
-				local targetPos = currentTargetPart.Position
-				if key == "Hit" then
-					return CFrame.new(targetPos)
-				elseif key == "Target" then
-					return currentTargetPart
-				elseif key == "UnitRay" then
-					local origin = camera.CFrame.Position
-					return Ray.new(origin, (targetPos - origin).Unit)
-				end
-			end
-			return oldIndex(self, key)
-		end)
-	end
-end)
-
 local function getSingleFactionText()
 	local team = player.Team
 	if not team then
@@ -1025,6 +974,7 @@ end)
 
 local elapsedTime = 0
 local statsTimer = 0
+local aimTimer = 0
 local frameCounter = 0
 local cachedFps = 60
 local renderConn
@@ -1036,6 +986,7 @@ renderConn = RunService.RenderStepped:Connect(function(dt)
 
 	elapsedTime += dt
 	statsTimer += dt
+	aimTimer += dt
 	frameCounter += 1
 
 	for _, grad in ipairs(animatedGradients) do
@@ -1056,16 +1007,19 @@ renderConn = RunService.RenderStepped:Connect(function(dt)
 		end
 	end
 
-	if aimState.enabled then
-		local plr, part = resolveSilentAimTarget()
-		currentTargetPlayer = plr
-		currentTargetPart = part
-	else
-		currentTargetPlayer = nil
-		currentTargetPart = nil
+	if aimTimer >= 0.08 then
+		aimTimer = 0
+		if aimState.enabled then
+			local plr, part = resolveSilentAimTarget()
+			currentTargetPlayer = plr
+			currentTargetPart = part
+		else
+			currentTargetPlayer = nil
+			currentTargetPart = nil
+		end
 	end
 
-	if statsTimer >= 0.25 then
+	if statsTimer >= 0.3 then
 		cachedFps = math.clamp(math.floor((frameCounter / statsTimer) + 0.5), 1, 999)
 		frameCounter = 0
 		statsTimer = 0
