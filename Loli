@@ -1,6 +1,5 @@
 -- ============================================================
--- DARKWARE | PVP COMBAT MODULE (EXTRACTED FROM SACRED AHK v12.5)
--- Sin cambiar nombre ni UI | Solo funciones PvP integradas
+-- DARKWARE | PVP STANDALONE (UI ORIGINAL CONSERVADA)
 -- ============================================================
 
 local Players = game:GetService("Players")
@@ -21,336 +20,238 @@ pcall(function() mouse = player and player:GetMouse() end)
 local playerGui = player:WaitForChild("PlayerGui", 15)
 if not playerGui then return end
 
--- Limpiar UI previa de DarkWare si existe
+-- Limpiar UI vieja
 for _, old in ipairs(playerGui:GetChildren()) do
-    if old.Name == "DarkWare_PvP_UI" or old.Name == "DarkWare_Widgets_UI" then
+    if old.Name:match("SacredKeyUI") or old.Name:match("SacredUI") or old.Name:match("DarkWareUI") then
         pcall(function() old:Destroy() end)
     end
 end
 
 -- ============================================================
--- ESTADOS Y CONFIGURACIÓN PVP
+-- VARIABLES Y ESTADO PVP
 -- ============================================================
-local PvPConfig = {
-    SilentAimSkill = false,
-    DragonGunM1 = false,
-    TargetPlayers = true,
-    TargetMobs = false,
-    TeamCheck = false,
-    SafeZoneCheck = true,
-    PvPCheck = true,
-    SelectedTarget = "",
-    MaxRange = 2500,
+scriptStartTime = os.time()
+totalExecutions = 0
+startBounty = 0
+accumulatedBountyGained = 0
 
-    FastAttack = false,
-    FastAttackRange = 2500,
+SoruInfinitoEnabled = false
+SoruAimbotEnabled = false
+soruMaxDist = 1000
+AimlockPlayerEnabled = false
+AimlockNpcEnabled = false
+SilentAimPlayersEnabled = false
+SilentAimNPCsEnabled = false
+PlayerWidgetActive = false
+NpcWidgetActive = false
+SelectedSoruTarget = "Nearest"
+maxRange = 2500
 
-    WalkSpeed = false,
-    WalkSpeedValue = 16,
+_G.G_DragonGunM1 = false
+_G.G_AttackMobs = true
+_G.G_AttackPlayers = true
 
-    DashEnabled = false,
-    DashLengthDist = 1,
+_G.G_SilentAimSkill = false
+_G.G_SilentAimShowFOV = false
+_G.G_SilentAimFOV = 150
+_G.G_SilentAimPart = "HumanoidRootPart"
+_G.G_SilentAimFOVThickness = 2
+_G.G_SilentAimFOVTransparency = 1
+_G.G_SilentAimTargetPlayers = false
+_G.G_SilentAimTargetMobs = false
+_G.G_TargetRainbowBodyESP = false
+_G.G_SilentAimFOVMode = "Screen Center"
+_G.G_SilentAimTeamCheck = false
+_G.G_SilentAimSelectedPlayer = ""
+_G.G_AimbotSafeZoneCheck = true
+_G.G_AimbotPvPCheck = true
 
-    Noclip = false,
-    WalkOnWater = false,
-    NoAnim = false,
-    AntiStunHitbox = false,
-    SanguineNoCD = false,
+SuperJumpEnabled = false
+SuperJumpPower = 500
+SuperJumpWidgetVisible = false
 
-    SanguineAuto = false,
-    SanguineAutoDropDuration = 2.0,
-    SanguineWidgetVisible = false,
-    SanguineManualWidgetVisible = false,
+SanguineAutoEnabled = false
+SanguineWidgetVisible = false
+SanguineManualWidgetVisible = false
+SanguineAutoConnection = nil
+SanguineAutoDropDuration = 2.0
+SanguineAutoCooldown = false
+SanguineNoCDEnabled = false
+noCDCharConnection = nil
 
-    SuperJump = false,
-    SuperJumpPower = 500,
-    SuperJumpWidgetVisible = false,
+AntiStunHitboxEnabled = false
+antiStunHeartbeatConn = nil
+antiStunInputConn = nil
+antiStunCharConn = nil
 
-    SoulGuitarJump = false,
-    SoulGuitarDashLength = 121,
+SoulGuitarJumpEnabled = false
+SoulGuitarWidgetVisible = false
+SoulGuitarDashLength = 121
+soulGuitarBusy = false
 
-    InfSoru = false,
-    SoruAimbot = false,
-    SoruMaxDist = 1000,
-    SelectedSoruTarget = "Nearest",
+PortalSoruEnabled = false
+PortalSoruWidgetVisible = false
+PortalSanguineCEnabled = false
+PortalSanguineCTriggerMode = "PortalF"
 
-    PortalSoru = false,
-    PortalSanguineC = false,
-    PortalSanguineCTriggerMode = "PortalF",
-    FlashstepSkill = false,
-    FlashstepSkillWeapon = "Fruit",
-    FlashstepSkillKey = "Z",
-    FlashstepSkillDelay = 0.3,
+BlacklistedPlayers = {}
+FPSPingOverlayEnabled = false
+currentFPS = 0
+currentPing = 0
+currentLang = "EN"
+currentThemeName = "Neon Purple"
 
-    AimlockPlayer = false,
-    AimlockNpc = false,
-    PlayerWidgetActive = false,
-    NpcWidgetActive = false,
+DashEnabled = false
+DashLengthDist = 1
+DashRunning = false
+prevDashLength = 1
 
-    ESP_Enabled = false,
-    ESP_Name = true,
-    ESP_Level = true,
-    ESP_Bounty = true,
-    ESP_Fruit = true,
-    ESP_Distance = true,
-    ESP_HP = true,
-    ESP_Highlight = false,
-    ESP_TextSize = 12,
-    RainbowBodyESP = false,
+WalkSpeedEnabled = false
+WalkSpeedValue = 16
 
-    ShowFOV = false,
-    FOVRadius = 150,
-    ShowLine = false,
-    AutoV4 = false
-}
+NoclipEnabled = false
+NoclipConn = nil
+WalkOnWaterEnabled = false
+NoAnimEnabled = false
+NoAnimConnection = nil
+AutoV4Enabled = false
+local autoV4Thread = nil
 
-local BlacklistedPlayers = {}
-local currentSilentAimTarget = nil
-local lockedPlayerTarget = nil
-local lockedNpcTarget = nil
-local prevDashLength = 1
+_G.G_FlashstepSkillEnabled = false
+_G.G_FlashstepSkillWeapon = "Fruit"
+_G.G_FlashstepSkillKey = "Z"
+_G.G_FlashstepSkillDelay = 0.3
+_G.G_PortalSoruDelay = 0.35
+_G.G_PortalSanguineCDelay = 0.35
+
+_G.G_ESPEnabled = false
+_G.G_ESP_Name = true
+_G.G_ESP_Level = true
+_G.G_ESP_Bounty = true
+_G.G_ESP_Fruit = true
+_G.G_ESP_Distance = true
+_G.G_ESP_HP = true
+_G.G_ESP_TextSize = 12
+_G.G_ESP_Highlight = false
+_G.G_ESP_HighlightColor = "FF0000"
+
+UI_Toggle_Refreshes = {}
+ToggleRegistryMap = {}
+uiCardsRegistry = {}
+uiTogglesRegistry = {}
+uiSteppersRegistry = {}
 
 -- ============================================================
--- GUARDAR / CARGAR CONFIGURACIÓN DARKWARE
+-- PERSISTENCIA CONFIG
 -- ============================================================
-local function SaveDarkWarePvP()
+function SaveConfig()
+    local conf = {
+        ESPMaster = _G.G_ESPEnabled,
+        ESPName = _G.G_ESP_Name,
+        ESPLevel = _G.G_ESP_Level,
+        ESPBounty = _G.G_ESP_Bounty,
+        ESPFruit = _G.G_ESP_Fruit,
+        ESPDist = _G.G_ESP_Distance,
+        ESPHealth = _G.G_ESP_HP,
+        ESPHighlight = _G.G_ESP_Highlight,
+        ESPTextSize = _G.G_ESP_TextSize,
+
+        FastAttack = FastAttackEnabled,
+        WalkSpeed = WalkSpeedEnabled,
+        WSpeedVal = WalkSpeedValue,
+        Dash = DashEnabled,
+        DashDist = DashLengthDist,
+        Noclip = NoclipEnabled,
+        WalkOnWater = WalkOnWaterEnabled,
+
+        SanguineAuto = SanguineAutoEnabled,
+        SanguineDrop = SanguineAutoDropDuration,
+        SanguineNoCD = SanguineNoCDEnabled,
+        AntiStunHitbox = AntiStunHitboxEnabled,
+        SuperJump = SuperJumpEnabled,
+        SuperPower = SuperJumpPower,
+        SoulGuitar = SoulGuitarJumpEnabled,
+        SoulDash = SoulGuitarDashLength,
+        NoAnim = NoAnimEnabled,
+
+        TargetPlayers = _G.G_SilentAimTargetPlayers,
+        TargetMobs = _G.G_SilentAimTargetMobs,
+        SkillAimbot = _G.G_SilentAimSkill,
+        DragonM1 = _G.G_DragonGunM1,
+        TeamCheck = _G.G_SilentAimTeamCheck,
+        ShowFOV = _G.G_SilentAimShowFOV,
+        FOVRadius = _G.G_SilentAimFOV,
+        AimbotMaxDist = maxRange,
+
+        AimlockPlayers = AimlockPlayerEnabled,
+        AimlockNPCs = AimlockNpcEnabled,
+        PlayerWidgetActive = PlayerWidgetActive,
+        NpcWidgetActive = NpcWidgetActive,
+        SanguineWidgetVisible = SanguineWidgetVisible,
+        SanguineManualWidgetVisible = SanguineManualWidgetVisible,
+        SoulGuitarWidgetVisible = SoulGuitarWidgetVisible,
+        PortalSoruWidgetVisible = PortalSoruWidgetVisible,
+        SuperJumpWidgetVisible = SuperJumpWidgetVisible,
+
+        InfSoru = SoruInfinitoEnabled,
+        SoruAimbot = SoruAimbotEnabled,
+        PortalSoru = PortalSoruEnabled,
+        PortalSanguineC = PortalSanguineCEnabled,
+        PortalSanguineCTriggerMode = PortalSanguineCTriggerMode,
+        FPSPing = FPSPingOverlayEnabled,
+        AutoV4 = AutoV4Enabled,
+        ThemeName = currentThemeName,
+        Language = currentLang
+    }
     pcall(function()
         if writefile then
-            writefile("DarkWare_PvP_Config.json", HttpService:JSONEncode({
-                config = PvPConfig,
-                blacklist = BlacklistedPlayers
-            }))
+            writefile("DarkWare_Config.json", HttpService:JSONEncode(conf))
         end
     end)
 end
 
-local function LoadDarkWarePvP()
+function LoadConfig()
     pcall(function()
-        if isfile and readfile and isfile("DarkWare_PvP_Config.json") then
-            local decoded = HttpService:JSONDecode(readfile("DarkWare_PvP_Config.json"))
-            if decoded and type(decoded.config) == "table" then
-                for k, v in pairs(decoded.config) do
-                    if PvPConfig[k] ~= nil then
-                        PvPConfig[k] = v
-                    end
-                end
-            end
-            if decoded and type(decoded.blacklist) == "table" then
-                BlacklistedPlayers = decoded.blacklist
-            end
+        if isfile and readfile and isfile("DarkWare_Config.json") then
+            local conf = HttpService:JSONDecode(readfile("DarkWare_Config.json"))
+            if not conf then return end
+
+            if conf.ESPMaster ~= nil then _G.G_ESPEnabled = conf.ESPMaster end
+            if conf.ESPName ~= nil then _G.G_ESP_Name = conf.ESPName end
+            if conf.ESPLevel ~= nil then _G.G_ESP_Level = conf.ESPLevel end
+            if conf.ESPBounty ~= nil then _G.G_ESP_Bounty = conf.ESPBounty end
+            if conf.ESPFruit ~= nil then _G.G_ESP_Fruit = conf.ESPFruit end
+            if conf.ESPDist ~= nil then _G.G_ESP_Distance = conf.ESPDist end
+            if conf.ESPHealth ~= nil then _G.G_ESP_HP = conf.ESPHealth end
+            if conf.ESPHighlight ~= nil then _G.G_ESP_Highlight = conf.ESPHighlight end
+            if conf.ESPTextSize ~= nil then _G.G_ESP_TextSize = conf.ESPTextSize end
+
+            if conf.WSpeedVal ~= nil then WalkSpeedValue = conf.WSpeedVal end
+            if conf.DashDist ~= nil then DashLengthDist = conf.DashDist end
+            if conf.SuperPower ~= nil then SuperJumpPower = conf.SuperPower end
+            if conf.SanguineDrop ~= nil then SanguineAutoDropDuration = conf.SanguineDrop end
+            if conf.SanguineNoCD ~= nil then SanguineNoCDEnabled = conf.SanguineNoCD end
+            if conf.AntiStunHitbox ~= nil then AntiStunHitboxEnabled = conf.AntiStunHitbox end
+            if conf.SoulDash ~= nil then SoulGuitarDashLength = conf.SoulDash end
+            if conf.FOVRadius ~= nil then _G.G_SilentAimFOV = conf.FOVRadius end
+            if conf.AimbotMaxDist ~= nil then maxRange = conf.AimbotMaxDist end
+
+            if conf.SanguineManualWidgetVisible ~= nil then SanguineManualWidgetVisible = conf.SanguineManualWidgetVisible end
+            if conf.PlayerWidgetActive ~= nil then PlayerWidgetActive = conf.PlayerWidgetActive end
+            if conf.NpcWidgetActive ~= nil then NpcWidgetActive = conf.NpcWidgetActive end
+            if conf.SanguineWidgetVisible ~= nil then SanguineWidgetVisible = conf.SanguineWidgetVisible end
+            if conf.SoulGuitarWidgetVisible ~= nil then SoulGuitarWidgetVisible = conf.SoulGuitarWidgetVisible end
+            if conf.PortalSoruWidgetVisible ~= nil then PortalSoruWidgetVisible = conf.PortalSoruWidgetVisible end
+            if conf.SuperJumpWidgetVisible ~= nil then SuperJumpWidgetVisible = conf.SuperJumpWidgetVisible end
+
+            if conf.ThemeName and applyNewTheme then applyNewTheme(conf.ThemeName) end
+            if updateWidgetsVisuals then updateWidgetsVisuals() end
         end
     end)
 end
 
-pcall(LoadDarkWarePvP)
-
 -- ============================================================
--- UTILIDADES DE OBJETIVOS & PVP CHECKS
--- ============================================================
-local function IsAlly(p)
-    local main = player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("Main")
-    local frame = main
-        and main:FindFirstChild("Allies")
-        and main.Allies:FindFirstChild("Container")
-        and main.Allies.Container:FindFirstChild("Allies")
-        and main.Allies.Container.Allies:FindFirstChild("ScrollingFrame")
-        and main.Allies.Container.Allies.ScrollingFrame:FindFirstChild("Frame")
-    if not frame then return false end
-    return frame:FindFirstChild(p.Name) ~= nil
-end
-
-local function IsEnemy(p)
-    if not p or p == player then return false end
-    if IsAlly(p) then return false end
-    local myTeam, targetTeam = player.Team, p.Team
-    if myTeam and targetTeam and myTeam.Name == "Marines" and targetTeam.Name == "Marines" then
-        return false
-    end
-    return true
-end
-
-local function ReadPvPState(target)
-    local ok, on = pcall(function()
-        local attr = target:GetAttribute("PvpDisabled")
-        if attr ~= nil then return attr ~= true end
-        local main = target:FindFirstChild("PlayerGui") and target.PlayerGui:FindFirstChild("Main")
-        if main then
-            local dis = main:FindFirstChild("PvpDisabled")
-            if dis then return not dis.Visible end
-            local pvp = main:FindFirstChild("Pvp")
-            if pvp then
-                local frame = pvp:FindFirstChild("Frame")
-                if frame then
-                    local btn = frame:FindFirstChild("PvpButton") or frame:FindFirstChildOfClass("TextButton")
-                    if btn and btn:IsA("TextButton") then
-                        local txt = tostring(btn.Text or ""):upper()
-                        if txt:find("OFF") then return false end
-                        if txt:find("ON") then return true end
-                    end
-                end
-            end
-        end
-        return true
-    end)
-    return not ok or on
-end
-
-local function IsInSafeZone(target)
-    local ok, inZone = pcall(function()
-        local char = target.Character
-        if not char then return false end
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then return false end
-        local wo = workspace:FindFirstChild("_WorldOrigin")
-        if not wo then return false end
-
-        local safeZones = wo:FindFirstChild("SafeZones")
-        if safeZones then
-            for _, zone in pairs(safeZones:GetChildren()) do
-                local mesh = zone:FindFirstChild("Mesh")
-                if mesh and mesh:IsA("SpecialMesh") then
-                    local realDiameter = zone.Size.X * mesh.Scale.X
-                    local radius = realDiameter / 2
-                    if radius and radius > 0 and (zone.Position - hrp.Position).Magnitude <= radius then
-                        return true
-                    end
-                end
-            end
-        end
-
-        local spawns = wo:FindFirstChild("PlayerSpawns")
-        if spawns then
-            local folder = spawns:FindFirstChild(tostring(target.Team)) or spawns:FindFirstChild("Pirates")
-            if folder then
-                for _, sp in pairs(folder:GetChildren()) do
-                    local part = sp:FindFirstChild("Part")
-                    if part and (hrp.Position - part.Position).Magnitude <= 400 then
-                        return true
-                    end
-                end
-            end
-        end
-        return false
-    end)
-    return ok and inZone
-end
-
-local function getClosestPlayer(overrideMaxDist)
-    local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return nil end
-
-    local searchDist = overrideMaxDist or PvPConfig.SoruMaxDist or 3500
-    local closest, closestDist = nil, math.huge
-
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player
-            and not BlacklistedPlayers[p.Name]
-            and (not PvPConfig.PvPCheck or (p:GetAttribute("PvpDisabled") ~= true and ReadPvPState(p)))
-            and (not PvPConfig.SafeZoneCheck or not IsInSafeZone(p))
-            and (not PvPConfig.TeamCheck or IsEnemy(p))
-            and p.Character
-            and p.Character:FindFirstChild("HumanoidRootPart")
-        then
-            local hum = p.Character:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local dist = (p.Character.HumanoidRootPart.Position - myHrp.Position).Magnitude
-                if dist < closestDist and dist <= searchDist then
-                    closestDist = dist
-                    closest = p.Character
-                end
-            end
-        end
-    end
-    return closest
-end
-
-local function getClosestNPC()
-    local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not myHrp then return nil end
-    local container = workspace:FindFirstChild("Enemies") or workspace
-    local closest, closestDist = nil, math.huge
-
-    for _, npc in pairs(container:GetChildren()) do
-        if npc:IsA("Model") and npc:FindFirstChild("HumanoidRootPart") and not Players:GetPlayerFromCharacter(npc) then
-            local hum = npc:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                local dist = (npc.HumanoidRootPart.Position - myHrp.Position).Magnitude
-                if dist < closestDist and dist < PvPConfig.MaxRange then
-                    closestDist = dist
-                    closest = npc
-                end
-            end
-        end
-    end
-    return closest
-end
-
-local function GetClosestTargetToCenter()
-    local myChar = player.Character
-    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
-    if not myHRP then return nil end
-
-    if PvPConfig.SelectedTarget ~= "" and PvPConfig.SelectedTarget ~= "Nearest" then
-        local targetP = Players:FindFirstChild(PvPConfig.SelectedTarget)
-        if targetP and targetP ~= player and targetP.Character and not BlacklistedPlayers[targetP.Name] then
-            if PvPConfig.PvPCheck and not ReadPvPState(targetP) then return nil end
-            if PvPConfig.SafeZoneCheck and IsInSafeZone(targetP) then return nil end
-            if PvPConfig.TeamCheck and not IsEnemy(targetP) then return nil end
-            local hum = targetP.Character:FindFirstChildOfClass("Humanoid")
-            local hrp = targetP.Character:FindFirstChild("HumanoidRootPart")
-            if hum and hum.Health > 0 and hrp then
-                return hrp
-            end
-        end
-        return nil
-    end
-
-    local closestPart = nil
-    local shortestDist = PvPConfig.MaxRange or 3500
-
-    local function evaluateChar(character)
-        if not character or character == myChar then return end
-        local p = Players:GetPlayerFromCharacter(character)
-        if p then
-            if p == player or BlacklistedPlayers[p.Name] then return end
-            if PvPConfig.PvPCheck and not ReadPvPState(p) then return end
-            if PvPConfig.SafeZoneCheck and IsInSafeZone(p) then return end
-            if PvPConfig.TeamCheck and not IsEnemy(p) then return end
-        end
-        local hum = character:FindFirstChildOfClass("Humanoid")
-        if not hum or hum.Health <= 0 then return end
-        local part = character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
-        if not part then return end
-
-        local d = (part.Position - myHRP.Position).Magnitude
-        if d <= shortestDist then
-            shortestDist = d
-            closestPart = part
-        end
-    end
-
-    if PvPConfig.TargetPlayers then
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= player then
-                evaluateChar(p.Character)
-            end
-        end
-    end
-
-    if PvPConfig.TargetMobs then
-        local enemies = workspace:FindFirstChild("Enemies")
-        if enemies then
-            for _, enemy in ipairs(enemies:GetChildren()) do
-                evaluateChar(enemy)
-            end
-        end
-    end
-
-    return closestPart
-end
-
--- ============================================================
--- DRAGON GUN M1 FAST ATTACK
+-- MOTORES PVP (DRAGON GUN M1, AUTO V4, ANTI STUN, FAST ATTACK)
 -- ============================================================
 local DragonModules, DragonNet, ShootGunEvent, Validator2
 task.spawn(function()
@@ -376,14 +277,14 @@ local getupvals = debug.getupvalues or getupvalues
 local ShootFunction
 local V_Idx = { v26 = 12, v22 = 13, v25 = 14, v21 = 15, v23 = 16, v24 = 17, v27 = 18 }
 
-local function InitDragonGun()
-    local ok, res = pcall(require, ReplicatedStorage:WaitForChild("Controllers"):WaitForChild("CombatController"))
-    if ok and type(res) == "table" and res.Attack then
-        ShootFunction = getupval(res.Attack, 9)
+function InitDragonGun()
+    local success, result = pcall(require, ReplicatedStorage:WaitForChild("Controllers"):WaitForChild("CombatController"))
+    if success and type(result) == "table" and result.Attack then
+        ShootFunction = getupval(result.Attack, 9)
     end
 end
 
-local function GetNextValidator()
+function GetNextValidator()
     if not ShootFunction then InitDragonGun() end
     if not ShootFunction then return 0, 0 end
     local upvals = getupvals(ShootFunction)
@@ -419,234 +320,100 @@ local function GetNextValidator()
     return math.floor(v9 / v4 * 16777215), v7
 end
 
+function GetClosestDragonTarget()
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local closest, dist = nil, math.huge
+    local myPos = root.Position
+
+    if _G.G_AttackMobs or _G.G_SilentAimTargetMobs or SilentAimNPCsEnabled then
+        local enemies = workspace:FindFirstChild("Enemies")
+        if enemies then
+            for _, enemy in pairs(enemies:GetChildren()) do
+                local hum = enemy:FindFirstChildOfClass("Humanoid")
+                local r = enemy:FindFirstChild("HumanoidRootPart")
+                if hum and hum.Health > 0 and r then
+                    local d = (r.Position - myPos).Magnitude
+                    if d < dist then dist = d; closest = r end
+                end
+            end
+        end
+    end
+
+    if _G.G_AttackPlayers or _G.G_SilentAimTargetPlayers or SilentAimPlayersEnabled then
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= player and p.Character then
+                local hum = p.Character:FindFirstChildOfClass("Humanoid")
+                local r = p.Character:FindFirstChild("HumanoidRootPart")
+                if hum and hum.Health > 0 and r then
+                    local d = (r.Position - myPos).Magnitude
+                    if d < dist then dist = d; closest = r end
+                end
+            end
+        end
+    end
+    return closest
+end
+
 task.spawn(function()
     while true do
         task.wait(0.085)
-        if PvPConfig.DragonGunM1 then
+        if _G.G_DragonGunM1 then
             pcall(function()
                 local char = player.Character
                 local tool = char and char:FindFirstChildOfClass("Tool")
                 if not tool or tool.ToolTip ~= "Gun" then return end
-                local target = GetClosestTargetToCenter()
+                local target = GetClosestDragonTarget()
                 if not target then return end
                 local code, count = GetNextValidator()
                 if code ~= 0 and Validator2 then Validator2:FireServer(code, count) end
                 tool:SetAttribute("LocalOverheat", 0)
                 tool:SetAttribute("LocalTotalShots", (tool:GetAttribute("LocalTotalShots") or 0) + 1)
                 if ShootGunEvent then
-                    ShootGunEvent:FireServer(target.Position, { target.Parent or target })
+                    ShootGunEvent:FireServer(target.Position, { target })
                 end
             end)
         end
     end
 end)
 
--- ============================================================
--- FAST ATTACK (MULTI-TARGET)
--- ============================================================
-local RegisterHit, RegisterAttack = nil, nil
-local fastAttackRunning = false
-
-task.spawn(function()
-    for _, v in pairs(ReplicatedStorage:GetDescendants()) do
-        if v:IsA("RemoteEvent") and v.Name == "RE/RegisterHit" then RegisterHit = v end
-        if v:IsA("RemoteEvent") and v.Name == "RE/RegisterAttack" then RegisterAttack = v end
-    end
-end)
-
-local function AttackMultipleTargets(targets)
-    if not RegisterHit or not RegisterAttack then return end
-    pcall(function()
-        if not targets or #targets == 0 then return end
-        local allTargets = {}
-        for _, char in pairs(targets) do
-            local head = char:FindFirstChild("Head") or char:FindFirstChild("HumanoidRootPart")
-            if head then table.insert(allTargets, { char, head }) end
-        end
-        if #allTargets == 0 then return end
-        RegisterAttack:FireServer(0)
-        RegisterHit:FireServer(allTargets[1][2], allTargets)
-    end)
-end
-
-local function StartFastAttack()
-    if fastAttackRunning then return end
-    fastAttackRunning = true
-    task.spawn(function()
-        while PvPConfig.FastAttack do
-            RunService.Stepped:Wait()
-            local myChar = player.Character
-            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
-            if myHRP then
-                local targets = {}
-                if PvPConfig.TargetPlayers then
-                    for _, p in pairs(Players:GetPlayers()) do
-                        if p ~= player and p.Character and not BlacklistedPlayers[p.Name] then
-                            if PvPConfig.PvPCheck and not ReadPvPState(p) then continue end
-                            if PvPConfig.SafeZoneCheck and IsInSafeZone(p) then continue end
-                            if PvPConfig.TeamCheck and not IsEnemy(p) then continue end
-                            local hum = p.Character:FindFirstChild("Humanoid")
-                            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
-                            if hum and hrp and hum.Health > 0 and (hrp.Position - myHRP.Position).Magnitude <= PvPConfig.FastAttackRange then
-                                table.insert(targets, p.Character)
-                            end
-                        end
-                    end
-                end
-                if PvPConfig.TargetMobs then
-                    local enemies = workspace:FindFirstChild("Enemies")
-                    if enemies then
-                        for _, npc in pairs(enemies:GetChildren()) do
-                            local hum = npc:FindFirstChild("Humanoid")
-                            local hrp = npc:FindFirstChild("HumanoidRootPart")
-                            if hum and hrp and hum.Health > 0 and (hrp.Position - myHRP.Position).Magnitude <= PvPConfig.FastAttackRange then
-                                table.insert(targets, npc)
-                            end
-                        end
-                    end
-                end
-                if #targets > 0 then AttackMultipleTargets(targets) end
-            end
-        end
-        fastAttackRunning = false
-    end)
-end
-
--- ============================================================
--- MOVIMIENTO PVP: WALKSPEED, DASH, NOCLIP, WATER, NO ANIM
--- ============================================================
-RunService.Stepped:Connect(function()
-    local char = player.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    local hrp = char:FindFirstChild("HumanoidRootPart")
-
-    if PvPConfig.WalkSpeed and hum and hrp then
-        hum.WalkSpeed = PvPConfig.WalkSpeedValue
-        if hum.MoveDirection.Magnitude > 0 and PvPConfig.WalkSpeedValue > 20 then
-            hrp.CFrame = hrp.CFrame + (hum.MoveDirection * (PvPConfig.WalkSpeedValue / 100))
-        end
-    end
-
-    if PvPConfig.Noclip then
-        for _, part in pairs(char:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = false end
-        end
-    end
-end)
-
-task.spawn(function()
-    while true do
-        task.wait(0.1)
-        if PvPConfig.DashEnabled and player.Character then
+function startAutoV4Loop()
+    if autoV4Thread then return end
+    autoV4Thread = task.spawn(function()
+        while AutoV4Enabled do
+            task.wait(0.5)
             pcall(function()
-                player.Character:SetAttribute("DashLength", PvPConfig.DashLengthDist)
-                player.Character:SetAttribute("DashLengthAir", PvPConfig.DashLengthDist)
+                local char = player.Character
+                if not char then return end
+                local raceEnergy = char:GetAttribute("RaceEnergy")
+                if raceEnergy and raceEnergy >= 100 then
+                    local awk = player.Backpack:FindFirstChild("Awakening") or char:FindFirstChild("Awakening")
+                    if awk and awk:FindFirstChild("RemoteFunction") then
+                        awk.RemoteFunction:InvokeServer(true)
+                    else
+                        local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+                        if remotes and remotes:FindFirstChild("CommF_") then
+                            remotes.CommF_:InvokeServer("Awakening", true)
+                        end
+                    end
+                end
             end)
         end
-    end
-end)
-
-local function applyDashInstantly()
-    pcall(function()
-        if player.Character then
-            player.Character:SetAttribute("DashLength", PvPConfig.DashLengthDist)
-            player.Character:SetAttribute("DashLengthAir", PvPConfig.DashLengthDist)
-        end
+        autoV4Thread = nil
     end)
 end
 
-local function SetNoclip(state)
-    PvPConfig.Noclip = state
-    if not state and player.Character then
-        for _, part in pairs(player.Character:GetDescendants()) do
-            if part:IsA("BasePart") then part.CanCollide = true end
-        end
-    end
+function stopAutoV4Loop()
+    AutoV4Enabled = false
+    autoV4Thread = nil
 end
 
-task.spawn(function()
-    local waterPart = nil
-    local function getWaterPart()
-        if not waterPart or not waterPart.Parent then
-            waterPart = Instance.new("Part")
-            waterPart.Size = Vector3.new(200, 1, 200)
-            waterPart.Transparency = 1
-            waterPart.Anchored = true
-            waterPart.CanCollide = false
-            waterPart.Name = "DarkWareWaterPlatform"
-            waterPart.Parent = workspace
-        end
-        return waterPart
-    end
-
-    while true do
-        task.wait(0.15)
-        if PvPConfig.WalkOnWater then
-            local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-            local wp = getWaterPart()
-            if hrp and hrp.Position.Y >= 9.5 then
-                wp.Position = Vector3.new(hrp.Position.X, 9.2, hrp.Position.Z)
-                wp.CanCollide = true
-            else
-                wp.CanCollide = false
-            end
-        elseif waterPart and waterPart.Parent then
-            waterPart.CanCollide = false
-        end
-    end
-end)
-
-local ATTACK_KEYWORDS = {
-    "attack", "slash", "punch", "m1", "combo", "hit", "tool",
-    "ability", "skill", "kamehameha", "bullet", "gun", "sword", "melee", "fruit"
-}
-
-local function isAttackAnim(track)
-    local name = string.lower(track.Name)
-    for _, kw in ipairs(ATTACK_KEYWORDS) do
-        if string.find(name, kw) then return true end
-    end
-    return track.Priority == Enum.AnimationPriority.Action
-end
-
-local function StopPlayerAnimations()
-    local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    local animator = hum and hum:FindFirstChild("Animator")
-    if not animator then return end
-    for _, track in pairs(animator:GetPlayingAnimationTracks()) do
-        if not isAttackAnim(track) then
-            track:Stop(0)
-        end
-    end
-end
-
-RunService.Stepped:Connect(function()
-    if not PvPConfig.NoAnim then return end
-    local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.AutoRotate = true
-        StopPlayerAnimations()
-    end
-end)
-
--- ============================================================
--- ANTI STUN / HITBOX + SANGUINE NO CD + SANGUINE Z AUTO/MANUAL
--- ============================================================
-local antiStunHeartbeatConn = nil
-local antiStunInputConn = nil
-local noCDCharConnection = nil
-local SanguineAutoConnection = nil
-local SanguineAutoCooldown = false
-local sanguineLagBusy = false
-
-local function enableAntiStunHitbox()
-    PvPConfig.AntiStunHitbox = true
+function enableAntiStunHitbox()
+    AntiStunHitboxEnabled = true
     if antiStunHeartbeatConn then antiStunHeartbeatConn:Disconnect() end
     antiStunHeartbeatConn = RunService.Heartbeat:Connect(function()
-        if not PvPConfig.AntiStunHitbox then return end
+        if not AntiStunHitboxEnabled then return end
         pcall(function()
             local char = player.Character
             if not char then return end
@@ -670,7 +437,7 @@ local function enableAntiStunHitbox()
 
     if antiStunInputConn then antiStunInputConn:Disconnect() end
     antiStunInputConn = UserInputService.InputBegan:Connect(function(input, gp)
-        if not PvPConfig.AntiStunHitbox or gp then return end
+        if not AntiStunHitboxEnabled or gp then return end
         local char = player.Character
         local darkBlade = char and char:FindFirstChild("Dark Blade")
         if darkBlade and darkBlade:FindFirstChild("RemoteEvent") then
@@ -683,110 +450,185 @@ local function enableAntiStunHitbox()
     end)
 end
 
-local function disableAntiStunHitbox()
-    PvPConfig.AntiStunHitbox = false
+function disableAntiStunHitbox()
+    AntiStunHitboxEnabled = false
     if antiStunHeartbeatConn then antiStunHeartbeatConn:Disconnect(); antiStunHeartbeatConn = nil end
     if antiStunInputConn then antiStunInputConn:Disconnect(); antiStunInputConn = nil end
+    if antiStunCharConn then antiStunCharConn:Disconnect(); antiStunCharConn = nil end
 end
 
-local function setSanguineNoCD(state)
-    PvPConfig.SanguineNoCD = state
-    if state then
-        if player.Character then player.Character:SetAttribute("AllCooldown", 3) end
-        noCDCharConnection = player.CharacterAdded:Connect(function(char)
-            if PvPConfig.SanguineNoCD then char:SetAttribute("AllCooldown", 3) end
-        end)
-    else
-        if noCDCharConnection then noCDCharConnection:Disconnect(); noCDCharConnection = nil end
-        if player.Character then player.Character:SetAttribute("AllCooldown", nil) end
+RegisterHit, RegisterAttack = nil, nil
+FastAttackEnabled = false
+FastAttackRange = 2500
+FastAttackRunning = false
+
+task.spawn(function()
+    for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+        if v:IsA("RemoteEvent") and v.Name == "RE/RegisterHit" then RegisterHit = v end
+        if v:IsA("RemoteEvent") and v.Name == "RE/RegisterAttack" then RegisterAttack = v end
     end
-end
+end)
 
-local function dropFPS(duration)
-    if sanguineLagBusy then return end
-    sanguineLagBusy = true
-    local DROP_TO_FPS = 20
-    local stop = tick() + duration
-    local interval = 1 / DROP_TO_FPS
-    local con
-    con = RunService.RenderStepped:Connect(function()
-        if tick() > stop then
-            if con then con:Disconnect() end
-            sanguineLagBusy = false
-            return
+function AttackMultipleTargets(targets)
+    if not RegisterHit or not RegisterAttack then return end
+    pcall(function()
+        if not targets or #targets == 0 then return end
+        local allTargets = {}
+        for _, char in pairs(targets) do
+            local head = char:FindFirstChild("Head")
+            if head then table.insert(allTargets, { char, head }) end
         end
-        local now = tick()
-        while tick() - now < interval do end
+        if #allTargets == 0 then return end
+        RegisterAttack:FireServer(0)
+        RegisterHit:FireServer(allTargets[1][2], allTargets)
     end)
 end
 
-local function impulseSanguineZ(duration)
-    dropFPS(duration)
-    local char = player.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        local dir = camera.CFrame.LookVector
-        local att = Instance.new("Attachment")
-        att.Parent = hrp
-        local lv = Instance.new("LinearVelocity")
-        lv.MaxForce = math.huge
-        lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
-        lv.VectorVelocity = dir * 400
-        lv.Attachment0 = att
-        lv.Parent = hrp
-        task.delay(0.9, function()
-            if lv and lv.Parent then lv:Destroy() end
-            if att and att.Parent then att:Destroy() end
-        end)
-    end
-end
-
-local function dropFPSManual()
-    if sanguineLagBusy then return end
-    impulseSanguineZ(0.43)
-    task.wait(0.10)
-    sanguineLagBusy = false
-end
-
-local function startSanguineAutoWatcher()
-    if SanguineAutoConnection then SanguineAutoConnection:Disconnect() end
-    local char = player.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-
-    SanguineAutoConnection = hum.AnimationPlayed:Connect(function(animTrack)
-        if not PvPConfig.SanguineAuto or SanguineAutoCooldown then return end
-        local tool = char:FindFirstChildOfClass("Tool")
-        if not tool or not (string.find(string.lower(tool.Name), "sanguine") or string.find(string.lower(tool.Name), "art")) then
-            return
+function StartFastAttack()
+    if FastAttackRunning then return end
+    FastAttackRunning = true
+    task.spawn(function()
+        while FastAttackEnabled do
+            RunService.Stepped:Wait()
+            local myChar = player.Character
+            local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+            if myHRP then
+                local targets = {}
+                for _, p in pairs(Players:GetPlayers()) do
+                    if p ~= player and p.Character and not BlacklistedPlayers[p.Name] then
+                        local hum = p.Character:FindFirstChild("Humanoid")
+                        local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+                        if hum and hrp and hum.Health > 0 and (hrp.Position - myHRP.Position).Magnitude <= FastAttackRange then
+                            table.insert(targets, p.Character)
+                        end
+                    end
+                end
+                local enemies = workspace:FindFirstChild("Enemies")
+                if enemies then
+                    for _, npc in pairs(enemies:GetChildren()) do
+                        local hum = npc:FindFirstChild("Humanoid")
+                        local hrp = npc:FindFirstChild("HumanoidRootPart")
+                        if hum and hrp and hum.Health > 0 and (hrp.Position - myHRP.Position).Magnitude <= FastAttackRange then
+                            table.insert(targets, npc)
+                        end
+                    end
+                end
+                if #targets > 0 then AttackMultipleTargets(targets) end
+            end
         end
-        local animId = tostring(animTrack.Animation and animTrack.Animation.AnimationId or "")
-        if animId:find("14586872029") or animId:find("14418367908") or animId:find("14418370048") then
-            SanguineAutoCooldown = true
-            impulseSanguineZ(PvPConfig.SanguineAutoDropDuration)
-            task.delay(PvPConfig.SanguineAutoDropDuration + 0.5, function()
-                SanguineAutoCooldown = false
+        FastAttackRunning = false
+    end)
+end
+
+-- ============================================================
+-- MOVIMIENTO, DASH, NOCLIP, NO ANIM, SUPER JUMP, SOUL GUITAR
+-- ============================================================
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if WalkSpeedEnabled then
+            local hum = player.Character and player.Character:FindFirstChildOfClass("Humanoid")
+            if hum and hum.WalkSpeed ~= WalkSpeedValue then hum.WalkSpeed = WalkSpeedValue end
+        end
+    end
+end)
+
+function startDashLoop()
+    if DashRunning then return end
+    DashRunning = true
+    task.spawn(function()
+        while DashEnabled do
+            task.wait(0.1)
+            pcall(function()
+                local char = player.Character
+                if char then
+                    if char:GetAttribute("DashLength") ~= DashLengthDist then char:SetAttribute("DashLength", DashLengthDist) end
+                    if char:GetAttribute("DashLengthAir") ~= DashLengthDist then char:SetAttribute("DashLengthAir", DashLengthDist) end
+                end
             end)
         end
+        DashRunning = false
     end)
 end
 
--- ============================================================
--- SUPER JUMP & SOUL GUITAR GLITCH
--- ============================================================
-local soulGuitarBusy = false
-
-local function doSuperJump()
-    local char = player.Character
-    local hrp = char and char:FindFirstChild("HumanoidRootPart")
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if not hrp or not hum or hum.Health <= 0 then return end
-    StopPlayerAnimations()
-    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, PvPConfig.SuperJumpPower, hrp.AssemblyLinearVelocity.Z)
-    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+function stopDashLoop()
+    DashEnabled = false
+    pcall(function()
+        local char = player.Character
+        if char then
+            char:SetAttribute("DashLength", 1)
+            char:SetAttribute("DashLengthAir", 1)
+        end
+    end)
 end
 
-local function executeSoulGuitarJump()
+function applyDashInstantly()
+    pcall(function()
+        local char = player.Character
+        if char then
+            char:SetAttribute("DashLength", DashLengthDist)
+            char:SetAttribute("DashLengthAir", DashLengthDist)
+        end
+    end)
+end
+
+function SetNoclip(state)
+    NoclipEnabled = state
+    if state then
+        NoclipConn = RunService.Stepped:Connect(function()
+            local char = player.Character
+            if char and NoclipEnabled then
+                for _, part in pairs(char:GetDescendants()) do
+                    if part:IsA("BasePart") then part.CanCollide = false end
+                end
+            end
+        end)
+    else
+        if NoclipConn then NoclipConn:Disconnect(); NoclipConn = nil end
+        local char = player.Character
+        if char then
+            for _, part in pairs(char:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = true end
+            end
+        end
+    end
+end
+
+ATTACK_KEYWORDS = { "attack", "slash", "punch", "m1", "combo", "hit", "tool", "ability", "skill", "kamehameha", "bullet", "gun", "sword", "melee", "fruit" }
+
+function isAttackAnim(track)
+    local name = string.lower(track.Name)
+    for _, kw in ipairs(ATTACK_KEYWORDS) do
+        if string.find(name, kw) then return true end
+    end
+    return track.Priority == Enum.AnimationPriority.Action
+end
+
+function StopPlayerAnimations()
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local animator = hum and hum:FindFirstChild("Animator")
+    if not animator then return end
+    for _, track in pairs(animator:GetPlayingAnimationTracks()) do
+        if not isAttackAnim(track) then
+            track:Stop(0)
+        end
+    end
+end
+
+function doSuperJump()
+    local char = player.Character
+    if not char then return end
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hrp or not hum or hum.Health <= 0 then return end
+    StopPlayerAnimations()
+    hrp.AssemblyLinearVelocity = Vector3.new(hrp.AssemblyLinearVelocity.X, SuperJumpPower, hrp.AssemblyLinearVelocity.Z)
+    hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    if SuperJumpWidget then SuperJumpWidget.Visible = true end
+end
+
+function executeSoulGuitarJump()
     if soulGuitarBusy then return end
     local char = player.Character
     local hrp = char and char:FindFirstChild("HumanoidRootPart")
@@ -816,23 +658,23 @@ local function executeSoulGuitarJump()
     end)
 
     StopPlayerAnimations()
-    local look = hrp.CFrame.LookVector
-    local flat = Vector3.new(look.X, 0, look.Z)
-    if flat.Magnitude > 0 then flat = flat.Unit end
+    local lookVector = hrp.CFrame.LookVector
+    local flatLook = Vector3.new(lookVector.X, 0, lookVector.Z)
+    if flatLook.Magnitude > 0 then flatLook = flatLook.Unit end
 
-    local att = Instance.new("Attachment")
-    att.Parent = hrp
-    local lv = Instance.new("LinearVelocity")
-    lv.MaxForce = math.huge
-    lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
-    lv.VectorVelocity = Vector3.new(flat.X * 180, 80, flat.Z * 180)
-    lv.Attachment0 = att
-    lv.Parent = hrp
+    local soulAtt = Instance.new("Attachment")
+    soulAtt.Parent = hrp
+    local soulLV = Instance.new("LinearVelocity")
+    soulLV.MaxForce = math.huge
+    soulLV.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+    soulLV.VectorVelocity = Vector3.new(flatLook.X * 180, 80, flatLook.Z * 180)
+    soulLV.Attachment0 = soulAtt
+    soulLV.Parent = hrp
     hum:ChangeState(Enum.HumanoidStateType.Jumping)
 
     task.delay(0.7, function()
-        if lv and lv.Parent then lv:Destroy() end
-        if att and att.Parent then att:Destroy() end
+        if soulLV and soulLV.Parent then soulLV:Destroy() end
+        if soulAtt and soulAtt.Parent then soulAtt:Destroy() end
     end)
 
     task.wait(0.6)
@@ -841,99 +683,90 @@ end
 
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 and PvPConfig.SoulGuitarJump then
+    if input.UserInputType == Enum.UserInputType.MouseButton1 and SoulGuitarJumpEnabled then
         executeSoulGuitarJump()
     end
 end)
 
 -- ============================================================
--- SORU INFINITO & PORTAL PVP COMBOS
+-- PORTAL COMBOS, WALK ON WATER, ESP, SANGUINE Z & AIMBOT
 -- ============================================================
-local function enforceSoru(char)
-    if not char then return end
-    if PvPConfig.InfSoru then char:SetAttribute("FlashstepCooldown", 1) end
-    char.AttributeChanged:Connect(function(attr)
-        if attr == "FlashstepCooldown" and PvPConfig.InfSoru and char:GetAttribute("FlashstepCooldown") ~= 1 then
-            char:SetAttribute("FlashstepCooldown", 1)
-        end
-    end)
-end
-
-task.spawn(function()
-    while true do
-        task.wait(0.5)
-        if PvPConfig.InfSoru and player.Character then
-            pcall(function() player.Character:SetAttribute("FlashstepCooldown", 1) end)
-        end
-    end
-end)
-
-local function isHoldingPortalFruit()
+function isHoldingPortalFruit()
     local char = player.Character
     local tool = char and char:FindFirstChildOfClass("Tool")
     if not tool then return false end
-    local n = string.lower(tool.Name)
-    return string.find(n, "portal") or string.find(n, "door")
+    local tName = string.lower(tool.Name)
+    return string.find(tName, "portal") or string.find(tName, "door")
 end
 
-local function equipToolByKeyword(kw1, kw2)
+function equipSanguineArt()
     local char = player.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if not char or not hum then return nil end
-
-    for _, t in ipairs(char:GetChildren()) do
-        if t:IsA("Tool") then
-            local n = string.lower(t.Name)
-            if string.find(n, kw1) or (kw2 and string.find(n, kw2)) then return t end
-        end
-    end
-
-    local bp = player:FindFirstChild("Backpack")
-    if bp then
-        for _, t in ipairs(bp:GetChildren()) do
-            if t:IsA("Tool") then
-                local n = string.lower(t.Name)
-                if string.find(n, kw1) or (kw2 and string.find(n, kw2)) then
-                    hum:EquipTool(t)
-                    task.wait(0.1)
-                    return t
-                end
+    local tool = char:FindFirstChild("Sanguine Art") or char:FindFirstChild("Sanguine")
+    if not tool and player:FindFirstChild("Backpack") then
+        for _, t in ipairs(player.Backpack:GetChildren()) do
+            if string.find(string.lower(t.Name), "sanguine") then
+                hum:EquipTool(t)
+                tool = t
+                task.wait(0.1)
+                break
             end
         end
     end
-    return nil
+    return tool
 end
 
-local function pressKeyVirtual(kc, holdTime)
-    if not VirtualInputManager or not kc then return end
-    VirtualInputManager:SendKeyEvent(true, kc, false, game)
-    task.wait(holdTime or 0.05)
-    VirtualInputManager:SendKeyEvent(false, kc, false, game)
+function equipPortalFruit()
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not char or not hum then return nil end
+    local tool = char:FindFirstChild("Portal-Portal") or char:FindFirstChild("Portal Fruit") or char:FindFirstChild("Portal") or char:FindFirstChild("Door")
+    if not tool and player:FindFirstChild("Backpack") then
+        for _, t in ipairs(player.Backpack:GetChildren()) do
+            local name = string.lower(t.Name)
+            if string.find(name, "portal") or string.find(name, "door") then
+                hum:EquipTool(t)
+                tool = t
+                task.wait(0.1)
+                break
+            end
+        end
+    end
+    return tool
 end
 
-local function doPortalCombo()
-    task.wait(PvPConfig.FlashstepSkillDelay or 0.3)
+function doPortalCombo()
     if not isHoldingPortalFruit() then
-        equipToolByKeyword("portal", "door")
+        equipPortalFruit()
         task.wait(0.08)
     end
-    if not isHoldingPortalFruit() then return end
-    pressKeyVirtual(Enum.KeyCode.X, 0.05)
+    if not isHoldingPortalFruit() or not VirtualInputManager then return end
+    local function pressKey(kc)
+        VirtualInputManager:SendKeyEvent(true, kc, false, game)
+        task.wait(0.05)
+        VirtualInputManager:SendKeyEvent(false, kc, false, game)
+    end
+    pressKey(Enum.KeyCode.X)
     task.wait(0.15)
-    pressKeyVirtual(Enum.KeyCode.Z, 0.05)
+    pressKey(Enum.KeyCode.Z)
 end
 
-local function doPortalSanguineCCombo()
+function doPortalSanguineCCombo()
     task.wait(0.25)
-    equipToolByKeyword("sanguine", "art")
+    equipSanguineArt()
     task.wait(0.1)
-    pressKeyVirtual(Enum.KeyCode.C, 0.15)
+    if VirtualInputManager then
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.C, false, game)
+        task.wait(0.15)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.C, false, game)
+    end
 end
 
-local FLASH_NAMES = { "FlashStepRegular", "FlashStepDraco", "FlashStep", "Flashstep", "Soru" }
-local FLASH_IDS = { "17555632156", "18461649274", "616006778", "616010882", "5403485593", "5403491911" }
+FLASH_NAMES = { "FlashStepRegular", "FlashStepDraco", "FlashStep", "Flashstep", "Soru" }
+FLASH_IDS = { "17555632156", "18461649274", "616006778", "616010882", "5403485593", "5403491911" }
 
-local function isFlashstep(track)
+function isFlashstep(track)
     for _, n in ipairs(FLASH_NAMES) do
         if string.find(string.lower(track.Name), string.lower(n)) then return true end
     end
@@ -944,65 +777,522 @@ local function isFlashstep(track)
     return false
 end
 
-local function executeFlashstepSkillCombo()
-    if not PvPConfig.FlashstepSkill then return end
+function executeFlashstepSkillCombo()
+    if not _G.G_FlashstepSkillEnabled then return end
     task.spawn(function()
-        task.wait(PvPConfig.FlashstepSkillDelay or 0.3)
-        if not PvPConfig.FlashstepSkill then return end
+        task.wait(tonumber(_G.G_FlashstepSkillDelay) or 0.3)
+        if not _G.G_FlashstepSkillEnabled or not VirtualInputManager then return end
         local slotMap = { Melee = 1, Fruit = 2, Sword = 3, Gun = 4 }
-        local slotNum = slotMap[PvPConfig.FlashstepSkillWeapon or "Fruit"] or 2
+        local slotNum = slotMap[_G.G_FlashstepSkillWeapon or "Fruit"] or 2
         local SLOT_KEYS = { [1] = Enum.KeyCode.One, [2] = Enum.KeyCode.Two, [3] = Enum.KeyCode.Three, [4] = Enum.KeyCode.Four }
-        pressKeyVirtual(SLOT_KEYS[slotNum], 0.06)
+        local function pressKey(kc)
+            VirtualInputManager:SendKeyEvent(true, kc, false, game)
+            task.wait(0.06)
+            VirtualInputManager:SendKeyEvent(false, kc, false, game)
+        end
+        pressKey(SLOT_KEYS[slotNum])
         task.wait(0.12)
-        local kc = Enum.KeyCode[PvPConfig.FlashstepSkillKey or "Z"]
-        if kc then pressKeyVirtual(kc, 0.06) end
+        local keyName = _G.G_FlashstepSkillKey or "Z"
+        if Enum.KeyCode[keyName] then pressKey(Enum.KeyCode[keyName]) end
     end)
 end
 
-local function monitorChar(char)
-    enforceSoru(char)
-    if PvPConfig.SanguineNoCD then char:SetAttribute("AllCooldown", 3) end
-    if PvPConfig.SanguineAuto then startSanguineAutoWatcher() end
-
-    local hum = char:WaitForChild("Humanoid", 5)
-    if not hum then return end
-    hum.AnimationPlayed:Connect(function(track)
+function monitorCharPortal(char)
+    local h = char:WaitForChild("Humanoid", 5)
+    if not h then return end
+    h.AnimationPlayed:Connect(function(track)
         local animName = string.lower(track.Name)
         local isPortalF = string.find(animName, "portal") or string.find(animName, "teleport")
             or string.find(animName, "warp") or string.find(animName, "door") or string.find(animName, "world")
         local isSoru = isFlashstep(track)
 
-        if PvPConfig.PortalSoru and isSoru then
-            task.spawn(doPortalCombo)
-        end
-        if PvPConfig.PortalSanguineC then
-            if (PvPConfig.PortalSanguineCTriggerMode == "PortalF" and isPortalF)
-                or (PvPConfig.PortalSanguineCTriggerMode == "Soru" and isSoru)
-            then
+        if PortalSoruEnabled and isSoru then task.spawn(doPortalCombo) end
+        if PortalSanguineCEnabled then
+            if (PortalSanguineCTriggerMode == "PortalF" and isPortalF) or (PortalSanguineCTriggerMode == "Soru" and isSoru) then
                 task.spawn(doPortalSanguineCCombo)
             end
         end
-        if PvPConfig.FlashstepSkill and isSoru then
+        if _G.G_FlashstepSkillEnabled and isSoru then
             executeFlashstepSkillCombo()
         end
     end)
 end
 
-player.CharacterAdded:Connect(monitorChar)
-if player.Character then monitorChar(player.Character) end
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.F and PortalSanguineCEnabled and PortalSanguineCTriggerMode == "PortalF" and isHoldingPortalFruit() then
+        task.spawn(doPortalSanguineCCombo)
+    end
+end)
 
--- ============================================================
--- SILENT AIM (METAMETHODS) + SORU AIMBOT + CAMERA AIMLOCK
--- ============================================================
+task.spawn(function()
+    local waterPart = nil
+    local function getWaterPart()
+        if not waterPart or not waterPart.Parent then
+            waterPart = Instance.new("Part")
+            waterPart.Size = Vector3.new(200, 1, 200)
+            waterPart.Transparency = 1
+            waterPart.Anchored = true
+            waterPart.CanCollide = false
+            waterPart.Name = "DarkWareWaterPlatform"
+            waterPart.Parent = workspace
+        end
+        return waterPart
+    end
+    while true do
+        task.wait(0.15)
+        if WalkOnWaterEnabled then
+            local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            local wp = getWaterPart()
+            if hrp and hrp.Position.Y >= 9.5 then
+                wp.Position = Vector3.new(hrp.Position.X, 9.2, hrp.Position.Z)
+                wp.CanCollide = true
+            else
+                wp.CanCollide = false
+            end
+        elseif waterPart and waterPart.Parent then
+            waterPart.CanCollide = false
+        end
+    end
+end)
+
+local ESPRunning = false
+local espObjects = {}
+local lastESPUpdate = 0
+local ESP_UPDATE_INTERVAL = 0.1
+local playerCache = {}
+
+function getTeamInfo(targetP)
+    if not targetP or not targetP.Team then return "Unknown", Color3.fromRGB(255, 255, 255) end
+    if targetP.Team.Name == "Marines" then return "Marines", Color3.fromRGB(0, 170, 255) end
+    return "Pirates", Color3.fromRGB(255, 70, 70)
+end
+
+function hexToColor3(hex)
+    local r = tonumber(hex:sub(1, 2), 16) / 255 or 0
+    local g = tonumber(hex:sub(3, 4), 16) / 255 or 1
+    local b = tonumber(hex:sub(5, 6), 16) / 255 or 0
+    return Color3.new(r, g, b)
+end
+
+function removeESP(targetP)
+    if espObjects[targetP] then
+        pcall(function()
+            if espObjects[targetP].gui then espObjects[targetP].gui:Destroy() end
+            if espObjects[targetP].highlight then espObjects[targetP].highlight:Destroy() end
+        end)
+        espObjects[targetP] = nil
+    end
+end
+
+function createESP(targetP)
+    if not targetP or targetP == player then return end
+    local char = targetP.Character
+    local head = char and char:FindFirstChild("Head")
+    if not head then return end
+
+    local _, color = getTeamInfo(targetP)
+    local billboard = Instance.new("BillboardGui")
+    billboard.Name = "DarkWareESP_Billboard"
+    billboard.Adornee = head
+    billboard.Size = UDim2.new(0, 200, 0, 75)
+    billboard.StudsOffset = Vector3.new(0, 3, 0)
+    billboard.AlwaysOnTop = true
+    billboard.Parent = head
+
+    local text = Instance.new("TextLabel")
+    text.Size = UDim2.new(1, 0, 1, 0)
+    text.BackgroundTransparency = 1
+    text.TextScaled = false
+    text.TextSize = _G.G_ESP_TextSize or 12
+    text.RichText = true
+    text.Font = Enum.Font.SourceSansBold
+    text.TextStrokeTransparency = 0
+    text.TextColor3 = color
+    text.Parent = billboard
+
+    local highlight = nil
+    if _G.G_ESP_Highlight then
+        local hlColor = hexToColor3(_G.G_ESP_HighlightColor or "FF0000")
+        highlight = Instance.new("Highlight")
+        highlight.Name = "ESP_PlayerHighlight"
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.FillColor = hlColor
+        highlight.FillTransparency = 0.5
+        highlight.OutlineColor = hlColor
+        highlight.OutlineTransparency = 0
+        highlight.Parent = char
+    end
+
+    espObjects[targetP] = { gui = billboard, label = text, char = char, highlight = highlight }
+end
+
+function getPlayerData(targetP)
+    if not playerCache[targetP] then
+        playerCache[targetP] = { level = "?", fruit = "None", bounty = 0, team = "Unknown", color = Color3.fromRGB(255, 255, 255), lastUpdate = 0 }
+    end
+    local data = playerCache[targetP]
+    local now = tick()
+    if now - data.lastUpdate > 5 then
+        pcall(function() data.level = targetP.Data.Level.Value end)
+        pcall(function() data.fruit = targetP.Data.DevilFruit.Value end)
+        pcall(function() data.bounty = targetP.leaderstats["Bounty/Honor"].Value end)
+        data.team, data.color = getTeamInfo(targetP)
+        data.lastUpdate = now
+    end
+    return data
+end
+
+function DisableESP()
+    ESPRunning = false
+    for targetP in pairs(espObjects) do removeESP(targetP) end
+    espObjects = {}
+end
+ClearESP = DisableESP
+
+function updateESP()
+    if not _G.G_ESPEnabled then DisableESP(); return end
+    local anySubActive = _G.G_ESP_Name or _G.G_ESP_Level or _G.G_ESP_Bounty or _G.G_ESP_Fruit or _G.G_ESP_Distance or _G.G_ESP_HP or _G.G_ESP_Highlight
+    if not anySubActive then DisableESP(); return end
+
+    local now = tick()
+    if now - lastESPUpdate < ESP_UPDATE_INTERVAL then return end
+    lastESPUpdate = now
+
+    local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return end
+    local myPos = myRoot.Position
+
+    for _, targetP in ipairs(Players:GetPlayers()) do
+        if targetP ~= player then
+            local char = targetP.Character
+            local head = char and char:FindFirstChild("Head")
+            local data = espObjects[targetP]
+            if char and head then
+                if not data or data.char ~= char or not data.gui.Parent then
+                    removeESP(targetP)
+                    createESP(targetP)
+                    data = espObjects[targetP]
+                end
+                if data then
+                    local hum = char:FindFirstChild("Humanoid")
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    if hum and root then
+                        local distance = math.floor((root.Position - myPos).Magnitude)
+                        local hp = math.floor((hum.Health / math.max(hum.MaxHealth, 1)) * 100)
+                        local pData = getPlayerData(targetP)
+                        local warnTag = (type(pData.bounty) == "number" and pData.bounty > 10000000) and "⚠ " or ""
+                        local isPvpDisabled = targetP:GetAttribute("PvpDisabled") == true
+                        local pvpState = isPvpDisabled and "PvP Disabled " or "PVP Enabled "
+                        local pvpIcon = isPvpDisabled and "🟢 " or "🔴 "
+
+                        data.label.TextColor3 = pData.color
+                        data.label.TextSize = _G.G_ESP_TextSize or 12
+
+                        local parts = {}
+                        if _G.G_ESP_Name then table.insert(parts, warnTag .. "[" .. pData.team .. '] <font color="rgb(255,255,0)">' .. targetP.Name .. "</font>") end
+                        if _G.G_ESP_Level then table.insert(parts, " [Lv." .. tostring(pData.level) .. "]") end
+                        if _G.G_ESP_Bounty then
+                            local bM = type(pData.bounty) == "number" and math.floor(pData.bounty / 1000000) or 0
+                            if isPvpDisabled then
+                                table.insert(parts, '\n<font color="rgb(0,255,0)">' .. pvpIcon .. pvpState .. "</font> | Bounty: " .. bM .. "M\n")
+                            else
+                                table.insert(parts, "\n" .. pvpIcon .. pvpState .. "| Bounty: " .. bM .. "M\n")
+                            end
+                        end
+                        if _G.G_ESP_Fruit then table.insert(parts, "Fruit: " .. tostring(pData.fruit) .. "\n") end
+                        if _G.G_ESP_Distance then table.insert(parts, tostring(distance) .. "m | ") end
+                        if _G.G_ESP_HP then table.insert(parts, "HP " .. tostring(hp) .. "%") end
+                        data.label.Text = table.concat(parts)
+                    end
+                end
+            elseif data then
+                removeESP(targetP)
+            end
+        end
+    end
+end
+
+function EnableESP()
+    if ESPRunning then return end
+    ESPRunning = true
+    for _, targetP in ipairs(Players:GetPlayers()) do createESP(targetP) end
+    task.spawn(function()
+        while ESPRunning do
+            pcall(updateESP)
+            task.wait(ESP_UPDATE_INTERVAL)
+        end
+    end)
+end
+
+function enforceSoru(char)
+    if not char then return end
+    if SoruInfinitoEnabled then char:SetAttribute("FlashstepCooldown", 1) end
+    char.AttributeChanged:Connect(function(attr)
+        if attr == "FlashstepCooldown" and SoruInfinitoEnabled and char:GetAttribute("FlashstepCooldown") ~= 1 then
+            char:SetAttribute("FlashstepCooldown", 1)
+        end
+    end)
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if SoruInfinitoEnabled and player.Character then
+            pcall(function() player.Character:SetAttribute("FlashstepCooldown", 1) end)
+        end
+    end
+end)
+
+function StartNoAnimLoop()
+    if NoAnimConnection then NoAnimConnection:Disconnect() end
+    NoAnimConnection = RunService.Stepped:Connect(function()
+        if not NoAnimEnabled then return end
+        local char = player.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            hum.AutoRotate = true
+            StopPlayerAnimations()
+        end
+    end)
+end
+
+sanguineLagBusy = false
+function dropFPS(duration)
+    if sanguineLagBusy then return end
+    sanguineLagBusy = true
+    local DROP_TO_FPS = 20
+    local stop = tick() + duration
+    local interval = 1 / DROP_TO_FPS
+    local con
+    con = RunService.RenderStepped:Connect(function()
+        if tick() > stop then
+            if con then con:Disconnect() end
+            sanguineLagBusy = false
+            return
+        end
+        local now = tick()
+        while tick() - now < interval do end
+    end)
+end
+
+function dropFPSManual()
+    if sanguineLagBusy then return end
+    sanguineLagBusy = true
+    dropFPS(0.43)
+    local hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if hrp then
+        local dir = camera.CFrame.LookVector
+        local att = Instance.new("Attachment"); att.Parent = hrp
+        local lv = Instance.new("LinearVelocity")
+        lv.MaxForce = math.huge
+        lv.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+        lv.VectorVelocity = dir * 400
+        lv.Attachment0 = att
+        lv.Parent = hrp
+        task.delay(0.9, function()
+            if lv and lv.Parent then lv:Destroy() end
+            if att and att.Parent then att:Destroy() end
+        end)
+    end
+    task.wait(0.10)
+    sanguineLagBusy = false
+end
+
+function startSanguineAutoWatcher()
+    if SanguineAutoConnection then SanguineAutoConnection:Disconnect() end
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    SanguineAutoConnection = hum.AnimationPlayed:Connect(function(animTrack)
+        if not SanguineAutoEnabled or SanguineAutoCooldown then return end
+        local tool = char:FindFirstChildOfClass("Tool")
+        if not tool or not (string.find(string.lower(tool.Name), "sanguine") or string.find(string.lower(tool.Name), "art")) then return end
+        local animId = tostring(animTrack.Animation and animTrack.Animation.AnimationId or "")
+        if animId:find("14586872029") or animId:find("14418367908") or animId:find("14418370048") then
+            SanguineAutoCooldown = true
+            dropFPS(SanguineAutoDropDuration)
+            local hrp2 = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if hrp2 then
+                local dir2 = camera.CFrame.LookVector
+                local att2 = Instance.new("Attachment"); att2.Parent = hrp2
+                local lv2 = Instance.new("LinearVelocity")
+                lv2.MaxForce = math.huge
+                lv2.VelocityConstraintMode = Enum.VelocityConstraintMode.Vector
+                lv2.VectorVelocity = dir2 * 400
+                lv2.Attachment0 = att2
+                lv2.Parent = hrp2
+                task.delay(0.9, function()
+                    if lv2 and lv2.Parent then lv2:Destroy() end
+                    if att2 and att2.Parent then att2:Destroy() end
+                end)
+            end
+            task.delay(SanguineAutoDropDuration + 0.5, function() SanguineAutoCooldown = false end)
+        end
+    end)
+end
+
+function getClosestPlayer(overrideMaxDist)
+    local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return nil end
+    local searchDist = overrideMaxDist or soruMaxDist or 3500
+    if AimlockTargetPlayer and AimlockTargetPlayer ~= "Nearest" then
+        local targetP = Players:FindFirstChild(AimlockTargetPlayer)
+        local hum = targetP and targetP.Character and targetP.Character:FindFirstChildOfClass("Humanoid")
+        local hrp = targetP and targetP.Character and targetP.Character:FindFirstChild("HumanoidRootPart")
+        if hum and hum.Health > 0 and hrp then return targetP.Character end
+    end
+    local closest, closestDist = nil, math.huge
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= player and not BlacklistedPlayers[p.Name] and p:GetAttribute("PvpDisabled") ~= true and p.Character then
+            local hum = p.Character:FindFirstChildOfClass("Humanoid")
+            local hrp = p.Character:FindFirstChild("HumanoidRootPart")
+            if hum and hum.Health > 0 and hrp then
+                local dist = (hrp.Position - myHrp.Position).Magnitude
+                if dist < closestDist and dist <= searchDist then
+                    closestDist = dist
+                    closest = p.Character
+                end
+            end
+        end
+    end
+    return closest
+end
+
+function getClosestNPC()
+    local myHrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+    if not myHrp then return nil end
+    local container = workspace:FindFirstChild("Enemies") or workspace
+    local closest, closestDist = nil, math.huge
+    for _, npc in pairs(container:GetChildren()) do
+        if npc:IsA("Model") and not Players:GetPlayerFromCharacter(npc) then
+            local hum = npc:FindFirstChildOfClass("Humanoid")
+            local hrp = npc:FindFirstChild("HumanoidRootPart")
+            if hum and hum.Health > 0 and hrp then
+                local dist = (hrp.Position - myHrp.Position).Magnitude
+                if dist < closestDist and dist < maxRange then
+                    closestDist = dist
+                    closest = npc
+                end
+            end
+        end
+    end
+    return closest
+end
+
+function IsSilentAimAlly(p)
+    local main = player:FindFirstChild("PlayerGui") and player.PlayerGui:FindFirstChild("Main")
+    local frame = main and main:FindFirstChild("Allies")
+        and main.Allies:FindFirstChild("Container")
+        and main.Allies.Container:FindFirstChild("Allies")
+        and main.Allies.Container.Allies:FindFirstChild("ScrollingFrame")
+        and main.Allies.Container.Allies.ScrollingFrame:FindFirstChild("Frame")
+    return frame and frame:FindFirstChild(p.Name) ~= nil or false
+end
+
+function IsSilentAimEnemy(p)
+    if not p or p == player or IsSilentAimAlly(p) then return false end
+    if player.Team and p.Team and player.Team.Name == "Marines" and p.Team.Name == "Marines" then return false end
+    return true
+end
+
+function AX_ReadPvPState(target)
+    local attr = target:GetAttribute("PvpDisabled")
+    if attr ~= nil then return attr ~= true end
+    return true
+end
+
+function AX_InSafeZone(target)
+    local char = target.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    local wo = workspace:FindFirstChild("_WorldOrigin")
+    if not hrp or not wo then return false end
+    local safeZones = wo:FindFirstChild("SafeZones")
+    if safeZones then
+        for _, zone in pairs(safeZones:GetChildren()) do
+            local mesh = zone:FindFirstChild("Mesh")
+            if mesh and mesh:IsA("SpecialMesh") then
+                local radius = (zone.Size.X * mesh.Scale.X) / 2
+                if radius > 0 and (zone.Position - hrp.Position).Magnitude <= radius then return true end
+            end
+        end
+    end
+    return false
+end
+
+function GetClosestTargetToCenter()
+    local myChar = player.Character
+    local myHRP = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if not myHRP then return nil end
+
+    if _G.G_SilentAimSelectedPlayer and _G.G_SilentAimSelectedPlayer ~= "" and _G.G_SilentAimSelectedPlayer ~= "Nearest" then
+        local targetP = Players:FindFirstChild(_G.G_SilentAimSelectedPlayer)
+        if targetP and targetP ~= player and targetP.Character and not BlacklistedPlayers[targetP.Name] then
+            if _G.G_AimbotPvPCheck and not AX_ReadPvPState(targetP) then return nil end
+            if _G.G_AimbotSafeZoneCheck and AX_InSafeZone(targetP) then return nil end
+            if not _G.G_SilentAimTeamCheck or IsSilentAimEnemy(targetP) then
+                local hum = targetP.Character:FindFirstChildOfClass("Humanoid")
+                local hrp = targetP.Character:FindFirstChild("HumanoidRootPart")
+                if hum and hum.Health > 0 and hrp then return targetP.Character:FindFirstChild(_G.G_SilentAimPart) or hrp end
+            end
+        end
+        return nil
+    end
+
+    local closestPart, shortest3DDist = nil, maxRange or 3500
+    local function checkTargetPart(character)
+        if not character or character == myChar then return end
+        local p = Players:GetPlayerFromCharacter(character)
+        if p then
+            if p == player or BlacklistedPlayers[p.Name] then return end
+            if _G.G_AimbotPvPCheck and not AX_ReadPvPState(p) then return end
+            if _G.G_AimbotSafeZoneCheck and AX_InSafeZone(p) then return end
+            if _G.G_SilentAimTeamCheck and not IsSilentAimEnemy(p) then return end
+        end
+        local hum = character:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then return end
+        local part = character:FindFirstChild(_G.G_SilentAimPart) or character:FindFirstChild("HumanoidRootPart") or character:FindFirstChild("Head")
+        if not part then return end
+        local worldDist = (part.Position - myHRP.Position).Magnitude
+        if worldDist <= shortest3DDist then shortest3DDist = worldDist; closestPart = part end
+    end
+
+    if _G.G_SilentAimTargetPlayers then
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= player then checkTargetPart(p.Character) end
+        end
+    end
+    if _G.G_SilentAimTargetMobs then
+        local enemies = workspace:FindFirstChild("Enemies")
+        if enemies then
+            for _, enemy in ipairs(enemies:GetChildren()) do checkTargetPart(enemy) end
+        end
+    end
+    return closestPart
+end
+
+local currentSilentAimTarget = nil
+local FOVCircle = nil
+pcall(function()
+    if Drawing and Drawing.new then
+        FOVCircle = Drawing.new("Circle")
+        FOVCircle.Visible = false
+        FOVCircle.Color = Color3.fromRGB(170, 0, 255)
+        FOVCircle.Radius = _G.G_SilentAimFOV
+        FOVCircle.Thickness = 2
+        FOVCircle.Filled = false
+    end
+end)
+
 if hookmetamethod then
-    local oldIndex
+    local oldIndex, oldNamecall
     pcall(function()
         oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
             if not checkcaller() and self == mouse and (key == "Hit" or key == "Target") then
-                if PvPConfig.SoruAimbot then
-                    local targetName = PvPConfig.SelectedSoruTarget
+                if SoruAimbotEnabled then
+                    local targetName = SelectedSoruTarget
                     if targetName == "Nearest" then
-                        local cl = getClosestPlayer(PvPConfig.SoruMaxDist)
+                        local cl = getClosestPlayer(soruMaxDist)
                         local p = cl and Players:GetPlayerFromCharacter(cl)
                         targetName = p and p.Name or nil
                     end
@@ -1010,14 +1300,13 @@ if hookmetamethod then
                         local tObj = Players:FindFirstChild(targetName)
                         local eHRP = tObj and tObj.Character and tObj.Character:FindFirstChild("HumanoidRootPart")
                         local myHRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                        if eHRP and myHRP and (myHRP.Position - eHRP.Position).Magnitude <= PvPConfig.SoruMaxDist then
+                        if eHRP and myHRP and (myHRP.Position - eHRP.Position).Magnitude <= (soruMaxDist or 3500) then
                             if key == "Hit" then return CFrame.new(eHRP.Position) end
                             if key == "Target" then return eHRP end
                         end
                     end
                 end
-
-                if PvPConfig.SilentAimSkill and currentSilentAimTarget then
+                if _G.G_SilentAimSkill and currentSilentAimTarget then
                     if key == "Hit" then return CFrame.new(currentSilentAimTarget.Position) end
                     if key == "Target" then return currentSilentAimTarget end
                 end
@@ -1026,36 +1315,29 @@ if hookmetamethod then
         end))
     end)
 
-    local oldNamecall
     pcall(function()
         oldNamecall = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
             local args = { ... }
             local method = getnamecallmethod and tostring(getnamecallmethod()):lower() or ""
-
-            if not checkcaller() and PvPConfig.SilentAimSkill and currentSilentAimTarget then
+            if not checkcaller() and _G.G_SilentAimSkill and currentSilentAimTarget then
                 if method == "fireserver" or method == "invokeserver" then
-                    local pos = currentSilentAimTarget.Position
+                    local activePos = currentSilentAimTarget.Position
                     if self.Name:find("RegisterHit") then
                         local targetChar = currentSilentAimTarget.Parent
-                        local head = targetChar and (targetChar:FindFirstChild("Head") or currentSilentAimTarget)
-                        if head and targetChar then
-                            args[1] = head
-                            args[2] = { { targetChar, head } }
+                        local targetHead = targetChar and (targetChar:FindFirstChild("Head") or currentSilentAimTarget)
+                        if targetHead and targetChar then
+                            args[1] = targetHead
+                            args[2] = { { targetChar, targetHead } }
                             return oldNamecall(self, unpack(args))
                         end
                     elseif self.Name:find("ShootGunEvent") then
-                        args[1] = pos
-                        if currentSilentAimTarget.Parent then
-                            args[2] = { currentSilentAimTarget.Parent }
-                        end
+                        args[1] = activePos
+                        if currentSilentAimTarget.Parent then args[2] = { currentSilentAimTarget.Parent } end
                         return oldNamecall(self, unpack(args))
                     end
                     for i, arg in ipairs(args) do
-                        if typeof(arg) == "Vector3" then
-                            args[i] = pos
-                        elseif typeof(arg) == "CFrame" then
-                            args[i] = CFrame.new(pos)
-                        end
+                        if typeof(arg) == "Vector3" then args[i] = activePos
+                        elseif typeof(arg) == "CFrame" then args[i] = CFrame.new(activePos) end
                     end
                     return oldNamecall(self, unpack(args))
                 elseif method == "raycast" then
@@ -1073,10 +1355,828 @@ if hookmetamethod then
     end)
 end
 
+-- ============================================================
+-- INTERFAZ ORIGINAL (SIN BORRAR TU UI) + NOMBRE DARKWARE
+-- ============================================================
+local THEMES = {
+    ["Rainbow RGB"] = Color3.fromRGB(255, 0, 128),
+    ["Snow White"] = Color3.fromRGB(255, 255, 255),
+    ["Neon Purple"] = Color3.fromRGB(170, 0, 255),
+    ["Electric Blue"] = Color3.fromRGB(0, 150, 255),
+    ["Crimson Red"] = Color3.fromRGB(255, 0, 50),
+    ["Toxic Green"] = Color3.fromRGB(0, 255, 100),
+    ["Hot Pink"] = Color3.fromRGB(255, 0, 255),
+    ["Gold Yellow"] = Color3.fromRGB(255, 215, 0),
+    ["Cyan"] = Color3.fromRGB(0, 255, 255),
+    ["Orange"] = Color3.fromRGB(255, 140, 0),
+}
+local currentThemeColor = THEMES["Neon Purple"]
+local COLORS = {
+    Background = Color3.fromRGB(0, 0, 0),
+    PanelBG = Color3.fromRGB(0, 0, 0),
+    TextWhite = Color3.fromRGB(255, 255, 255),
+    TextGray = Color3.fromRGB(200, 200, 210),
+    ToggleOff = Color3.fromRGB(0, 0, 0),
+}
+local themeStrokes, themeTexts, themeFrames = {}, {}, {}
+
+local parentGui = nil
+pcall(function() if gethui then parentGui = gethui() end end)
+if not parentGui then pcall(function() parentGui = game:GetService("CoreGui") end) end
+if not parentGui then parentGui = playerGui end
+
+local function safeParent(gui)
+    if not gui then return end
+    local ok = pcall(function() gui.Parent = parentGui end)
+    if not ok or not gui.Parent then pcall(function() gui.Parent = playerGui end) end
+end
+
+GuiStore = {
+    screenGui = Instance.new("ScreenGui"),
+    toggleIconGui = Instance.new("ScreenGui"),
+    playerWidgetGui = Instance.new("ScreenGui"),
+    npcWidgetGui = Instance.new("ScreenGui"),
+    superJumpWidgetGui = Instance.new("ScreenGui"),
+    sanguineManualWidgetGui = Instance.new("ScreenGui"),
+    sanguineAutoWidgetGui = Instance.new("ScreenGui"),
+    soulGuitarWidgetGui = Instance.new("ScreenGui"),
+    portalSoruWidgetGui = Instance.new("ScreenGui"),
+}
+
+GuiStore.screenGui.Name = "DarkWareUI_Main"
+GuiStore.screenGui.ResetOnSpawn = false
+safeParent(GuiStore.screenGui)
+
+GuiStore.toggleIconGui.Name = "DarkWareUI_ToggleIcon"
+GuiStore.toggleIconGui.ResetOnSpawn = false
+safeParent(GuiStore.toggleIconGui)
+
+for key, g in pairs(GuiStore) do
+    if key:find("WidgetGui") then
+        g.Name = "DarkWareUI_" .. key
+        g.ResetOnSpawn = false
+        g.DisplayOrder = 99999
+        g.IgnoreGuiInset = true
+        safeParent(g)
+    end
+end
+
+local screenGui = GuiStore.screenGui
+local toggleIconGui = GuiStore.toggleIconGui
+local playerWidgetGui = GuiStore.playerWidgetGui
+local npcWidgetGui = GuiStore.npcWidgetGui
+local superJumpWidgetGui = GuiStore.superJumpWidgetGui
+local sanguineManualWidgetGui = GuiStore.sanguineManualWidgetGui
+local sanguineAutoWidgetGui = GuiStore.sanguineAutoWidgetGui
+
+function isColorLight(c3)
+    return (c3.R * 0.299 + c3.G * 0.587 + c3.B * 0.114) > 0.65
+end
+
+function updateWidgetsVisuals()
+    local isLight = isColorLight(currentThemeColor)
+    local darkTxt = Color3.fromRGB(15, 10, 20)
+    local lightTxt = Color3.fromRGB(255, 255, 255)
+
+    if PlayerWidgetBtn then
+        PlayerWidgetBtn.Visible = PlayerWidgetActive
+        PlayerWidgetBtn.BackgroundColor3 = AimlockPlayerEnabled and currentThemeColor or Color3.fromRGB(0, 0, 0)
+        PlayerWidgetBtn.BackgroundTransparency = AimlockPlayerEnabled and 0 or 1
+        PlayerWidgetBtn.TextColor3 = AimlockPlayerEnabled and (isLight and darkTxt or lightTxt) or lightTxt
+        PlayerWidgetBtn.Text = AimlockPlayerEnabled and "🔒 PLAYER: ON" or "🔓 PLAYER: OFF"
+    end
+    if NpcWidgetBtn then
+        NpcWidgetBtn.Visible = NpcWidgetActive
+        NpcWidgetBtn.BackgroundColor3 = AimlockNpcEnabled and currentThemeColor or Color3.fromRGB(0, 0, 0)
+        NpcWidgetBtn.BackgroundTransparency = AimlockNpcEnabled and 0 or 1
+        NpcWidgetBtn.TextColor3 = AimlockNpcEnabled and (isLight and darkTxt or lightTxt) or lightTxt
+        NpcWidgetBtn.Text = AimlockNpcEnabled and "🔒 NPC: ON" or "🔓 NPC: OFF"
+    end
+    if SuperJumpWidget then
+        SuperJumpWidget.Visible = SuperJumpWidgetVisible
+        SuperJumpWidget.BackgroundColor3 = currentThemeColor
+        SuperJumpWidget.BackgroundTransparency = 0
+        SuperJumpWidget.TextColor3 = isLight and darkTxt or lightTxt
+        SuperJumpWidget.Text = "⬆ JUMP"
+    end
+    if SanguineManualWidget then
+        SanguineManualWidget.Visible = SanguineManualWidgetVisible
+        SanguineManualWidget.BackgroundColor3 = currentThemeColor
+        SanguineManualWidget.BackgroundTransparency = 0
+        SanguineManualWidget.TextColor3 = isLight and darkTxt or lightTxt
+        SanguineManualWidget.Text = "🩸 SANGUINE Z"
+    end
+    if SanguineAutoWidget then
+        SanguineAutoWidget.Visible = SanguineWidgetVisible
+        SanguineAutoWidget.BackgroundColor3 = SanguineAutoEnabled and currentThemeColor or Color3.fromRGB(0, 0, 0)
+        SanguineAutoWidget.BackgroundTransparency = SanguineAutoEnabled and 0 or 1
+        SanguineAutoWidget.TextColor3 = SanguineAutoEnabled and (isLight and darkTxt or lightTxt) or lightTxt
+        SanguineAutoWidget.Text = SanguineAutoEnabled and "🔴 Auto: ON" or "⚫ Auto: OFF"
+    end
+end
+
+function makeFloatingWidget(parent, pos)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 130, 0, 36)
+    btn.Position = pos
+    btn.BackgroundColor3 = Color3.fromRGB(15, 15, 22)
+    btn.BackgroundTransparency = 0.25
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = COLORS.TextWhite
+    btn.TextSize = 11.5
+    btn.Visible = false
+    btn.Active = true
+    btn.Draggable = true
+    btn.ZIndex = 1000
+    btn.Parent = parent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    local sk = Instance.new("UIStroke", btn)
+    sk.Color = currentThemeColor
+    sk.Thickness = 1.2
+    table.insert(themeStrokes, sk)
+    return btn
+end
+
+SuperJumpWidget = makeFloatingWidget(superJumpWidgetGui, UDim2.new(0.68, 0, 0.25, 0))
+SuperJumpWidget.Text = "⬆ JUMP"
+SuperJumpWidget.MouseButton1Click:Connect(function() doSuperJump() end)
+
+SanguineManualWidget = makeFloatingWidget(sanguineManualWidgetGui, UDim2.new(0.68, 0, 0.33, 0))
+SanguineManualWidget.Text = "🩸 SANGUINE Z"
+SanguineManualWidget.MouseButton1Click:Connect(function() dropFPSManual() end)
+
+SanguineAutoWidget = makeFloatingWidget(sanguineAutoWidgetGui, UDim2.new(0.68, 0, 0.41, 0))
+SanguineAutoWidget.Text = "🔴 Auto: ON"
+SanguineAutoWidget.MouseButton1Click:Connect(function()
+    SanguineAutoEnabled = not SanguineAutoEnabled
+    updateWidgetsVisuals()
+end)
+
+function makeWidget(parent, pos)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 115, 0, 36)
+    btn.Position = pos
+    btn.BackgroundColor3 = COLORS.ToggleOff
+    btn.Font = Enum.Font.GothamBold
+    btn.TextColor3 = COLORS.TextWhite
+    btn.TextSize = 10
+    btn.Visible = false
+    btn.Active = true
+    btn.Draggable = true
+    btn.Parent = parent
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+    local sk = Instance.new("UIStroke", btn)
+    sk.Color = currentThemeColor; sk.Thickness = 1.2
+    table.insert(themeStrokes, sk)
+    return btn
+end
+
+PlayerWidgetBtn = makeWidget(playerWidgetGui, UDim2.new(0.82, 0, 0.20, 0))
+PlayerWidgetBtn.Text = "🔓 PLAYER: OFF"
+PlayerWidgetBtn.MouseButton1Click:Connect(function()
+    AimlockPlayerEnabled = not AimlockPlayerEnabled
+    updateWidgetsVisuals()
+end)
+
+NpcWidgetBtn = makeWidget(npcWidgetGui, UDim2.new(0.82, 0, 0.27, 0))
+NpcWidgetBtn.Text = "🔓 NPC: OFF"
+NpcWidgetBtn.MouseButton1Click:Connect(function()
+    AimlockNpcEnabled = not AimlockNpcEnabled
+    updateWidgetsVisuals()
+end)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "DarkWareMainFrame"
+mainFrame.Size = UDim2.new(0, 480, 0, 315)
+mainFrame.Position = UDim2.new(0.5, -240, 0.5, -157)
+mainFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+mainFrame.BackgroundTransparency = 1
+mainFrame.Visible = true
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 24)
+
+local mainFrameStroke = Instance.new("UIStroke", mainFrame)
+mainFrameStroke.Color = currentThemeColor
+mainFrameStroke.Thickness = 1.2
+table.insert(themeStrokes, mainFrameStroke)
+
+local bgImageFrame = Instance.new("ImageLabel", mainFrame)
+bgImageFrame.Name = "AnimeBackground"
+bgImageFrame.Size = UDim2.new(1, 0, 1, 0)
+bgImageFrame.BackgroundTransparency = 1
+bgImageFrame.ImageTransparency = 0
+bgImageFrame.ScaleType = Enum.ScaleType.Crop
+bgImageFrame.ZIndex = 0
+bgImageFrame.Image = "rbxassetid://132404081379154"
+Instance.new("UICorner", bgImageFrame).CornerRadius = UDim.new(0, 24)
+
+task.spawn(function()
+    pcall(function() game:GetService("ContentProvider"):PreloadAsync({ bgImageFrame }) end)
+end)
+
+local rainContainer = Instance.new("Frame", mainFrame)
+rainContainer.Size = UDim2.new(1, 0, 1, 0)
+rainContainer.BackgroundTransparency = 1
+rainContainer.ClipsDescendants = true
+rainContainer.ZIndex = 1
+Instance.new("UICorner", rainContainer).CornerRadius = UDim.new(0, 50)
+
+local activeRainDrops = 0
+local MAX_RAIN_DROPS = 12
+
+function createIntenseRainDrop()
+    if not mainFrame.Visible or activeRainDrops >= MAX_RAIN_DROPS then return end
+    activeRainDrops = activeRainDrops + 1
+    local drop = Instance.new("Frame", rainContainer)
+    drop.Name = "RainDrop"
+    drop.Size = UDim2.new(0, 2, 0, math.random(14, 26))
+    drop.Position = UDim2.new(math.random(1, 99) / 100, 0, -0.15, 0)
+    drop.BackgroundColor3 = currentThemeColor
+    drop.BackgroundTransparency = math.random(2, 5) / 10
+    drop.BorderSizePixel = 0
+    Instance.new("UICorner", drop).CornerRadius = UDim.new(1, 0)
+
+    local targetX = drop.Position.X.Scale - (math.random(3, 8) / 100)
+    local duration = math.random(4, 9) / 10
+    local tw = TweenService:Create(drop, TweenInfo.new(duration, Enum.EasingStyle.Linear), {
+        Position = UDim2.new(targetX, 0, 1.15, 0),
+        BackgroundTransparency = 1
+    })
+    tw:Play()
+    tw.Completed:Connect(function()
+        activeRainDrops = activeRainDrops - 1
+        drop:Destroy()
+    end)
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.04)
+        pcall(createIntenseRainDrop)
+    end
+end)
+
+function centerAndMaximizeUI()
+    mainFrame.Visible = true
+    TweenService:Create(mainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out), {
+        Position = UDim2.new(0.5, -230, 0.5, -155)
+    }):Play()
+end
+
+local openButton = Instance.new("TextButton")
+openButton.Size = UDim2.new(0, 42, 0, 42)
+openButton.Position = UDim2.new(0, 15, 0, 15)
+openButton.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+openButton.BackgroundTransparency = 0
+openButton.Text = ""
+openButton.Visible = false
+openButton.Active = true
+openButton.Draggable = true
+openButton.Parent = toggleIconGui
+
+local toggleBG = Instance.new("ImageLabel")
+toggleBG.Name = "ToggleBackground"
+toggleBG.Image = "rbxassetid://132404081379154"
+toggleBG.Size = UDim2.new(1, 0, 1, 0)
+toggleBG.BackgroundTransparency = 1
+toggleBG.ScaleType = Enum.ScaleType.Crop
+toggleBG.ZIndex = 1
+toggleBG.Parent = openButton
+Instance.new("UICorner", toggleBG).CornerRadius = UDim.new(0, 8)
+Instance.new("UICorner", openButton).CornerRadius = UDim.new(0, 8)
+
+local openStroke = Instance.new("UIStroke", openButton)
+openStroke.Thickness = 1.8
+openStroke.Color = currentThemeColor
+table.insert(themeStrokes, openStroke)
+
+openButton.MouseButton1Click:Connect(function()
+    openButton.Visible = false
+    centerAndMaximizeUI()
+end)
+
+local controlsContainer = Instance.new("Frame", mainFrame)
+controlsContainer.Size = UDim2.new(0, 50, 0, 25)
+controlsContainer.Position = UDim2.new(1, -60, 0, 12)
+controlsContainer.BackgroundTransparency = 1
+
+function createTopControl(text, xOff, color, cb)
+    local btn = Instance.new("TextButton", controlsContainer)
+    btn.Size = UDim2.new(0, 22, 0, 22)
+    btn.Position = UDim2.new(0, xOff, 0, 0)
+    btn.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    btn.BackgroundTransparency = 1
+    btn.Text = text
+    btn.Font = Enum.Font.GothamBlack
+    btn.TextSize = 14
+    btn.TextColor3 = color
+    btn.TextStrokeTransparency = 0
+    btn.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 6)
+    local tcStroke = Instance.new("UIStroke", btn)
+    tcStroke.Color = color
+    tcStroke.Thickness = 1
+    btn.MouseButton1Click:Connect(cb)
+end
+
+createTopControl("-", 0, Color3.fromRGB(255, 255, 255), function()
+    mainFrame.Visible = false
+    openButton.Visible = true
+end)
+
+createTopControl("X", 26, Color3.fromRGB(255, 75, 75), function()
+    DisableESP()
+    screenGui:Destroy()
+    toggleIconGui:Destroy()
+    for key, g in pairs(GuiStore) do
+        if key:find("WidgetGui") and g then pcall(function() g:Destroy() end) end
+    end
+end)
+
+local sidebar = Instance.new("Frame", mainFrame)
+sidebar.Size = UDim2.new(0, 115, 1, 0)
+sidebar.Position = UDim2.new(0, 10, 0, 0)
+sidebar.BackgroundTransparency = 1
+
+local mainTitle = Instance.new("TextLabel", sidebar)
+mainTitle.Text = "DARKWARE"
+mainTitle.Font = Enum.Font.GothamBlack
+mainTitle.TextSize = 17
+mainTitle.TextColor3 = currentThemeColor
+mainTitle.Size = UDim2.new(0, 115, 0, 22)
+mainTitle.Position = UDim2.new(0, 12, 0, 12)
+mainTitle.BackgroundTransparency = 1
+mainTitle.TextXAlignment = Enum.TextXAlignment.Left
+table.insert(themeTexts, mainTitle)
+
+local PagesContainer = Instance.new("Frame", mainFrame)
+PagesContainer.Size = UDim2.new(0, 320, 1, -55)
+PagesContainer.Position = UDim2.new(0, 125, 0, 45)
+PagesContainer.BackgroundTransparency = 1
+
+function createScrollingPage()
+    local sf = Instance.new("ScrollingFrame", PagesContainer)
+    sf.Size = UDim2.new(1, 0, 1, 0)
+    sf.BackgroundTransparency = 1
+    sf.BorderSizePixel = 0
+    sf.ScrollBarThickness = 4
+    sf.CanvasSize = UDim2.new(0, 0, 0, 800)
+    sf.Visible = false
+
+    local pad = Instance.new("UIPadding", sf)
+    pad.PaddingTop = UDim.new(0, 12)
+    pad.PaddingBottom = UDim.new(0, 15)
+
+    local layout = Instance.new("UIListLayout", sf)
+    layout.Padding = UDim.new(0, 8)
+    layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        sf.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 45)
+    end)
+    return sf
+end
+
+local StatsPage = createScrollingPage()
+local CombatPage = createScrollingPage()
+local GlitchesPage = createScrollingPage()
+local CamLockPage = createScrollingPage()
+local SoruPage = createScrollingPage()
+local AppearancePage = createScrollingPage()
+local MiscPage = createScrollingPage()
+CombatPage.Visible = true
+
+local RightPanel = Instance.new("Frame", mainFrame)
+RightPanel.Size = UDim2.new(0, 160, 1, -55)
+RightPanel.Position = UDim2.new(0, 295, 0, 45)
+RightPanel.BackgroundColor3 = Color3.fromRGB(5, 5, 10)
+RightPanel.BackgroundTransparency = 0.65
+RightPanel.Visible = false
+Instance.new("UICorner", RightPanel).CornerRadius = UDim.new(0, 8)
+local rpStroke = Instance.new("UIStroke", RightPanel)
+rpStroke.Color = currentThemeColor
+rpStroke.Thickness = 1
+table.insert(themeStrokes, rpStroke)
+
+local ListScroll = Instance.new("ScrollingFrame", RightPanel)
+ListScroll.Size = UDim2.new(1, -10, 1, -10)
+ListScroll.Position = UDim2.new(0, 5, 0, 5)
+ListScroll.BackgroundTransparency = 1
+ListScroll.BorderSizePixel = 0
+ListScroll.ScrollBarThickness = 3
+ListScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+Instance.new("UIListLayout", ListScroll).Padding = UDim.new(0, 4)
+
+local sidebarScroll = Instance.new("ScrollingFrame", sidebar)
+sidebarScroll.Size = UDim2.new(1, 0, 1, -55)
+sidebarScroll.Position = UDim2.new(0, 0, 0, 48)
+sidebarScroll.BackgroundTransparency = 1
+sidebarScroll.BorderSizePixel = 0
+sidebarScroll.ScrollBarThickness = 2
+sidebarScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+sidebarScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+
+local sidebarLayout = Instance.new("UIListLayout", sidebarScroll)
+sidebarLayout.Padding = UDim.new(0, 4)
+sidebarLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+local sidebarPadding = Instance.new("UIPadding", sidebarScroll)
+sidebarPadding.PaddingLeft = UDim.new(0, 10)
+
+local categories = {
+    { key = "Combat", page = CombatPage },
+    { key = "Glitches", page = GlitchesPage },
+    { key = "ESP & Lock", page = CamLockPage },
+    { key = "Soru PvP", page = SoruPage },
+    { key = "Stats", page = StatsPage },
+    { key = "Appearance", page = AppearancePage },
+    { key = "Misc", page = MiscPage },
+}
+
+local activeTabBtn = nil
+for _, cat in ipairs(categories) do
+    local btn = Instance.new("TextButton", sidebarScroll)
+    btn.Text = cat.key
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.TextColor3 = (cat.page == CombatPage) and currentThemeColor or COLORS.TextGray
+    btn.Size = UDim2.new(1, -12, 0, 24)
+    btn.BackgroundTransparency = 1
+    btn.TextXAlignment = Enum.TextXAlignment.Left
+    if cat.page == CombatPage then
+        activeTabBtn = btn
+        table.insert(themeTexts, btn)
+    end
+    btn.MouseButton1Click:Connect(function()
+        if activeTabBtn then
+            activeTabBtn.TextColor3 = COLORS.TextGray
+            local idx = table.find(themeTexts, activeTabBtn)
+            if idx then table.remove(themeTexts, idx) end
+        end
+        activeTabBtn = btn
+        table.insert(themeTexts, btn)
+        btn.TextColor3 = currentThemeColor
+        for _, c in ipairs(categories) do c.page.Visible = false end
+        cat.page.Visible = true
+        if cat.key == "Soru PvP" then
+            RightPanel.Visible = true
+            PagesContainer.Size = UDim2.new(0, 165, 1, -55)
+        else
+            RightPanel.Visible = false
+            PagesContainer.Size = UDim2.new(0, 320, 1, -55)
+        end
+    end)
+end
+
+function createModuleCard(name, height, targetPage)
+    local card = Instance.new("Frame")
+    card.Size = UDim2.new(1, -8, 0, height)
+    card.BackgroundColor3 = Color3.fromRGB(5, 5, 10)
+    card.BackgroundTransparency = 0.65
+    card.BorderSizePixel = 0
+    card.Parent = targetPage
+    Instance.new("UICorner", card).CornerRadius = UDim.new(0, 14)
+    local cStroke = Instance.new("UIStroke", card)
+    cStroke.Color = currentThemeColor
+    cStroke.Thickness = 1
+    cStroke.Transparency = 0.4
+    table.insert(themeStrokes, cStroke)
+
+    local title = Instance.new("TextLabel", card)
+    title.Text = "[ " .. string.upper(name) .. " ]"
+    title.Font = Enum.Font.GothamBlack
+    title.TextSize = 11
+    title.TextColor3 = Color3.fromRGB(255, 255, 255)
+    title.TextStrokeTransparency = 0
+    title.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    title.Size = UDim2.new(1, 0, 0, 22)
+    title.Position = UDim2.new(0, 0, 0, 2)
+    title.BackgroundTransparency = 1
+    title.TextXAlignment = Enum.TextXAlignment.Center
+    return card
+end
+
+function addToggleElement(parent, labelText, defaultState, yPos, callback)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, -12, 0, 20)
+    frame.Position = UDim2.new(0, 6, 0, yPos)
+    frame.BackgroundTransparency = 1
+
+    local label = Instance.new("TextLabel", frame)
+    label.Text = labelText
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 9.5
+    label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Size = UDim2.new(0.68, 0, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local state = defaultState
+    local clickBtn = Instance.new("TextButton", frame)
+    clickBtn.Size = UDim2.new(0, 36, 0, 16)
+    clickBtn.Position = UDim2.new(1, -38, 0.5, -8)
+    clickBtn.BackgroundColor3 = state and currentThemeColor or Color3.fromRGB(25, 25, 30)
+    clickBtn.BackgroundTransparency = state and 0.2 or 0.5
+    clickBtn.Text = state and "ON" or "OFF"
+    clickBtn.Font = Enum.Font.GothamBold
+    clickBtn.TextSize = 8.5
+    clickBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clickBtn.TextStrokeTransparency = 0
+    clickBtn.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    Instance.new("UICorner", clickBtn).CornerRadius = UDim.new(0, 6)
+    local tStroke = Instance.new("UIStroke", clickBtn)
+    tStroke.Color = currentThemeColor
+    tStroke.Thickness = 1
+    table.insert(themeStrokes, tStroke)
+
+    local function setState(newState)
+        state = newState
+        clickBtn.BackgroundColor3 = state and currentThemeColor or Color3.fromRGB(25, 25, 30)
+        clickBtn.BackgroundTransparency = state and 0.2 or 0.5
+        clickBtn.Text = state and "ON" or "OFF"
+        callback(state)
+        updateWidgetsVisuals()
+    end
+
+    clickBtn.MouseButton1Click:Connect(function()
+        setState(not state)
+        if state then totalExecutions = totalExecutions + 1 end
+    end)
+
+    return setState
+end
+
+function addStepper(parent, labelText, yPos, minVal, maxVal, step, getter, setter, suffix)
+    local frame = Instance.new("Frame", parent)
+    frame.Size = UDim2.new(1, -12, 0, 22)
+    frame.Position = UDim2.new(0, 6, 0, yPos)
+    frame.BackgroundTransparency = 1
+
+    local label = Instance.new("TextLabel", frame)
+    label.Text = labelText
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 8.5
+    label.TextColor3 = COLORS.TextWhite
+    label.TextStrokeTransparency = 0
+    label.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    label.Size = UDim2.new(1, -95, 1, 0)
+    label.BackgroundTransparency = 1
+    label.TextXAlignment = Enum.TextXAlignment.Left
+
+    local minus = Instance.new("TextButton", frame)
+    minus.Size = UDim2.new(0, 18, 0, 18)
+    minus.Position = UDim2.new(1, -90, 0.5, -9)
+    minus.Text = "-"
+    minus.Font = Enum.Font.GothamBold
+    minus.TextSize = 11
+    minus.BackgroundTransparency = 1
+    minus.TextColor3 = COLORS.TextWhite
+    Instance.new("UICorner", minus).CornerRadius = UDim.new(0, 4)
+    local mStroke = Instance.new("UIStroke", minus); mStroke.Color = currentThemeColor; mStroke.Thickness = 1.2
+    table.insert(themeStrokes, mStroke)
+
+    local valueLabel = Instance.new("TextLabel", frame)
+    valueLabel.Size = UDim2.new(0, 44, 0, 18)
+    valueLabel.Position = UDim2.new(1, -68, 0.5, -9)
+    valueLabel.Text = tostring(getter()) .. (suffix or "")
+    valueLabel.Font = Enum.Font.GothamBold
+    valueLabel.TextSize = 8.5
+    valueLabel.TextColor3 = COLORS.TextWhite
+    valueLabel.BackgroundTransparency = 1
+
+    local plus = Instance.new("TextButton", frame)
+    plus.Size = UDim2.new(0, 18, 0, 18)
+    plus.Position = UDim2.new(1, -20, 0.5, -9)
+    plus.Text = "+"
+    plus.Font = Enum.Font.GothamBold
+    plus.TextSize = 11
+    plus.BackgroundTransparency = 1
+    plus.TextColor3 = COLORS.TextWhite
+    Instance.new("UICorner", plus).CornerRadius = UDim.new(0, 4)
+    local pStroke = Instance.new("UIStroke", plus); pStroke.Color = currentThemeColor; pStroke.Thickness = 1.2
+    table.insert(themeStrokes, pStroke)
+
+    minus.MouseButton1Click:Connect(function()
+        local v = math.max(minVal, math.floor((getter() - step) * 100 + 0.5) / 100)
+        setter(v)
+        valueLabel.Text = tostring(v) .. (suffix or "")
+    end)
+    plus.MouseButton1Click:Connect(function()
+        local v = math.min(maxVal, math.floor((getter() + step) * 100 + 0.5) / 100)
+        setter(v)
+        valueLabel.Text = tostring(v) .. (suffix or "")
+    end)
+end
+
+-- POBLAR COMBAT PAGE
+do
+    local c1 = createModuleCard("Aimbot Modules", 248, CombatPage)
+    addToggleElement(c1, "Aimbot Skills", _G.G_SilentAimSkill, 24, function(v) _G.G_SilentAimSkill = v end)
+    addToggleElement(c1, "Aimbot M1 (Dragon Gun)", _G.G_DragonGunM1, 48, function(v) _G.G_DragonGunM1 = v end)
+    addToggleElement(c1, "Target Players", _G.G_SilentAimTargetPlayers, 72, function(v) _G.G_SilentAimTargetPlayers = v end)
+
+    local aimbotTargetBtn = Instance.new("TextButton", c1)
+    aimbotTargetBtn.Size = UDim2.new(1, -12, 0, 20)
+    aimbotTargetBtn.Position = UDim2.new(0, 6, 0, 96)
+    aimbotTargetBtn.BackgroundTransparency = 1
+    aimbotTargetBtn.Text = "🎯 Target: Nearest"
+    aimbotTargetBtn.Font = Enum.Font.GothamBold
+    aimbotTargetBtn.TextSize = 8.5
+    aimbotTargetBtn.TextColor3 = currentThemeColor
+    Instance.new("UICorner", aimbotTargetBtn).CornerRadius = UDim.new(0, 4)
+    local aimStroke = Instance.new("UIStroke", aimbotTargetBtn); aimStroke.Color = currentThemeColor; aimStroke.Thickness = 1
+    table.insert(themeStrokes, aimStroke); table.insert(themeTexts, aimbotTargetBtn)
+
+    aimbotTargetBtn.MouseButton1Click:Connect(function()
+        local plist = { "Nearest" }
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= player then table.insert(plist, p.Name) end
+        end
+        local currIdx = table.find(plist, _G.G_SilentAimSelectedPlayer) or 1
+        local nextIdx = (currIdx % #plist) + 1
+        _G.G_SilentAimSelectedPlayer = plist[nextIdx] == "Nearest" and "" or plist[nextIdx]
+        aimbotTargetBtn.Text = "🎯 Target: " .. plist[nextIdx]
+    end)
+
+    addToggleElement(c1, "Target NPCs", _G.G_SilentAimTargetMobs, 120, function(v) _G.G_SilentAimTargetMobs = v end)
+    addToggleElement(c1, "Team Check", _G.G_SilentAimTeamCheck, 144, function(v) _G.G_SilentAimTeamCheck = v end)
+    addToggleElement(c1, "Ignore SafeZone", _G.G_AimbotSafeZoneCheck, 168, function(v) _G.G_AimbotSafeZoneCheck = v end)
+    addToggleElement(c1, "Ignore PvP OFF", _G.G_AimbotPvPCheck, 192, function(v) _G.G_AimbotPvPCheck = v end)
+    addStepper(c1, "Aimbot Max Dist:", 216, 100, 5000, 250, function() return maxRange end, function(v) maxRange = v end, "st")
+
+    local c2 = createModuleCard("Fast Attack & Combat", 50, CombatPage)
+    addToggleElement(c2, "Fast Attack", FastAttackEnabled, 24, function(v) FastAttackEnabled = v; if v then StartFastAttack() end end)
+
+    local c3 = createModuleCard("Movement", 200, CombatPage)
+    addToggleElement(c3, "Walk Speed", WalkSpeedEnabled, 24, function(v) WalkSpeedEnabled = v end)
+    addStepper(c3, "Speed:", 48, 16, 500, 50, function() return WalkSpeedValue end, function(v) WalkSpeedValue = v end, "")
+    addToggleElement(c3, "Dash Distance", DashEnabled, 76, function(v) DashEnabled = v; if v then startDashLoop() else stopDashLoop() end end)
+    addStepper(c3, "Distance:", 100, 1, 300, 10, function() return DashLengthDist end, function(v) DashLengthDist = v; if DashEnabled then applyDashInstantly() end end, "")
+    addToggleElement(c3, "Noclip", NoclipEnabled, 128, function(v) SetNoclip(v) end)
+    addToggleElement(c3, "Walk on Water", WalkOnWaterEnabled, 152, function(v) WalkOnWaterEnabled = v end)
+
+    local c4 = createModuleCard("Auto Race V4 & Stun", 74, CombatPage)
+    addToggleElement(c4, "Auto Race V4", AutoV4Enabled, 24, function(v) AutoV4Enabled = v; if v then startAutoV4Loop() else stopAutoV4Loop() end end)
+    addToggleElement(c4, "Anti Stun & Hitbox [Beta]", AntiStunHitboxEnabled, 48, function(v) if v then enableAntiStunHitbox() else disableAntiStunHitbox() end end)
+end
+
+-- POBLAR GLITCHES PAGE
+do
+    local g1 = createModuleCard("Sanguine Z PvP", 98, GlitchesPage)
+    addToggleElement(g1, "Sanguine Z No Cooldown", SanguineNoCDEnabled, 24, function(v)
+        SanguineNoCDEnabled = v
+        if player.Character then player.Character:SetAttribute("AllCooldown", v and 3 or nil) end
+    end)
+    addToggleElement(g1, "Sanguine Z TP Widget", SanguineManualWidgetVisible, 48, function(v) SanguineManualWidgetVisible = v end)
+    addToggleElement(g1, "Sanguine Z Auto", SanguineAutoEnabled, 72, function(v)
+        SanguineAutoEnabled = v; SanguineWidgetVisible = v
+        if v then startSanguineAutoWatcher() elseif SanguineAutoConnection then SanguineAutoConnection:Disconnect() end
+    end)
+
+    local g2 = createModuleCard("Super Jump & Soul Guitar", 102, GlitchesPage)
+    addToggleElement(g2, "Super Jump Widget", SuperJumpWidgetVisible, 24, function(v) SuperJumpEnabled = v; SuperJumpWidgetVisible = v end)
+    addStepper(g2, "Jump Power:", 48, 100, 1200, 100, function() return SuperJumpPower end, function(v) SuperJumpPower = v end, "")
+    addToggleElement(g2, "Soul Guitar Glitch", SoulGuitarJumpEnabled, 74, function(v)
+        SoulGuitarJumpEnabled = v
+        if v then
+            prevDashLength = DashLengthDist; DashLengthDist = SoulGuitarDashLength; DashEnabled = true; applyDashInstantly()
+        else
+            DashLengthDist = prevDashLength or 1; applyDashInstantly()
+        end
+    end)
+
+    local g3 = createModuleCard("No Animations", 50, GlitchesPage)
+    addToggleElement(g3, "No Animations", NoAnimEnabled, 24, function(v) NoAnimEnabled = v; if v then StartNoAnimLoop() elseif NoAnimConnection then NoAnimConnection:Disconnect() end end)
+end
+
+-- POBLAR ESP & LOCK PAGE
+do
+    local e1 = createModuleCard("Camera Aimlock Widgets", 74, CamLockPage)
+    addToggleElement(e1, "Aimlock Target Players", PlayerWidgetActive, 24, function(v) PlayerWidgetActive = v; AimlockPlayerEnabled = v end)
+    addToggleElement(e1, "Aimlock Target NPCs", NpcWidgetActive, 48, function(v) NpcWidgetActive = v; AimlockNpcEnabled = v end)
+
+    local e2 = createModuleCard("ESP & Visuals", 214, CamLockPage)
+    addToggleElement(e2, "General ESP", false, 24, function(v)
+        _G.G_ESPEnabled = v; _G.G_ESP_Name = v; _G.G_ESP_Level = v; _G.G_ESP_Bounty = v
+        _G.G_ESP_Fruit = v; _G.G_ESP_Distance = v; _G.G_ESP_HP = v; _G.G_ESP_Highlight = v
+        if v then EnableESP() else DisableESP() end
+    end)
+    addToggleElement(e2, "Show Name & Level", _G.G_ESP_Name, 48, function(v) _G.G_ESP_Name = v; _G.G_ESP_Level = v end)
+    addToggleElement(e2, "Show Bounty & PvP", _G.G_ESP_Bounty, 72, function(v) _G.G_ESP_Bounty = v end)
+    addToggleElement(e2, "Show Devil Fruit", _G.G_ESP_Fruit, 96, function(v) _G.G_ESP_Fruit = v end)
+    addToggleElement(e2, "Show Distance", _G.G_ESP_Distance, 120, function(v) _G.G_ESP_Distance = v end)
+    addToggleElement(e2, "Show HP %", _G.G_ESP_HP, 144, function(v) _G.G_ESP_HP = v end)
+    addToggleElement(e2, "Highlight Players", _G.G_ESP_Highlight, 168, function(v) _G.G_ESP_Highlight = v end)
+    addStepper(e2, "ESP Text Size:", 190, 8, 32, 1, function() return _G.G_ESP_TextSize end, function(v) _G.G_ESP_TextSize = v end, "px")
+end
+
+-- POBLAR SORU PVP PAGE + SELECTOR LATERAL
+do
+    local s1 = createModuleCard("Soru & Portal Combos", 146, SoruPage)
+    addToggleElement(s1, "Infinite Soru", SoruInfinitoEnabled, 24, function(v) SoruInfinitoEnabled = v; if v and player.Character then enforceSoru(player.Character) end end)
+    addToggleElement(s1, "Soru Aimbot", SoruAimbotEnabled, 48, function(v) SoruAimbotEnabled = v end)
+    addToggleElement(s1, "Portal Soru Combo (XZ)", PortalSoruEnabled, 72, function(v) PortalSoruEnabled = v; PortalSoruWidgetVisible = v end)
+    addToggleElement(s1, "Portal Sanguine C", PortalSanguineCEnabled, 96, function(v) PortalSanguineCEnabled = v end)
+    addToggleElement(s1, "Flashstep Skill Combo", _G.G_FlashstepSkillEnabled, 120, function(v) _G.G_FlashstepSkillEnabled = v end)
+
+    local function refreshPlayerListUI()
+        for _, child in ipairs(ListScroll:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+        local nBtn = Instance.new("TextButton", ListScroll)
+        nBtn.Size = UDim2.new(1, 0, 0, 24)
+        nBtn.BackgroundTransparency = 1
+        nBtn.Text = "🎯 Target: Nearest"
+        nBtn.Font = Enum.Font.GothamBold
+        nBtn.TextSize = 9.5
+        nBtn.TextColor3 = currentThemeColor
+        nBtn.MouseButton1Click:Connect(function()
+            SelectedSoruTarget = "Nearest"
+            _G.G_SilentAimSelectedPlayer = ""
+        end)
+
+        for _, p in pairs(Players:GetPlayers()) do
+            if p ~= player then
+                local b = Instance.new("TextButton", ListScroll)
+                b.Size = UDim2.new(1, 0, 0, 24)
+                b.BackgroundTransparency = 1
+                b.Text = "👤 " .. p.Name
+                b.Font = Enum.Font.GothamBold
+                b.TextSize = 9.5
+                b.TextColor3 = Color3.fromRGB(255, 255, 255)
+                b.MouseButton1Click:Connect(function()
+                    SelectedSoruTarget = p.Name
+                    _G.G_SilentAimSelectedPlayer = p.Name
+                end)
+            end
+        end
+    end
+
+    Players.PlayerAdded:Connect(refreshPlayerListUI)
+    Players.PlayerRemoving:Connect(refreshPlayerListUI)
+    refreshPlayerListUI()
+end
+
+-- POBLAR STATS, APPEARANCE Y MISC
+do
+    local stCard = createModuleCard("Player Profile", 110, StatsPage)
+    local pName = Instance.new("TextLabel", stCard)
+    pName.Size = UDim2.new(1, -16, 0, 22); pName.Position = UDim2.new(0, 8, 0, 28)
+    pName.BackgroundTransparency = 1; pName.Text = "Player: " .. player.Name
+    pName.Font = Enum.Font.GothamBold; pName.TextSize = 11; pName.TextColor3 = currentThemeColor
+
+    local pInfo = Instance.new("TextLabel", stCard)
+    pInfo.Size = UDim2.new(1, -16, 0, 40); pInfo.Position = UDim2.new(0, 8, 0, 52)
+    pInfo.BackgroundTransparency = 1; pInfo.Text = "Level / Bounty active in ESP & PvP"
+    pInfo.Font = Enum.Font.GothamSemibold; pInfo.TextSize = 10; pInfo.TextColor3 = COLORS.TextWhite
+
+    local bgCard = createModuleCard("UI Background Selector", 54, AppearancePage)
+    local bgOptions = {
+        "rbxassetid://79345150236270", "rbxassetid://91081822837053", "rbxassetid://109470605984573",
+        "rbxassetid://135204446064109", "rbxassetid://133381969265590", "rbxassetid://102851043691652",
+        "rbxassetid://134915662604167", "rbxassetid://132404081379154"
+    }
+    local bgIdx = 8
+    local bgBtn = Instance.new("TextButton", bgCard)
+    bgBtn.Size = UDim2.new(1, -16, 0, 24); bgBtn.Position = UDim2.new(0, 8, 0, 24)
+    bgBtn.BackgroundTransparency = 1; bgBtn.Text = "📷 Next Anime Wallpaper"
+    bgBtn.Font = Enum.Font.GothamBold; bgBtn.TextSize = 9.5; bgBtn.TextColor3 = COLORS.TextWhite
+    bgBtn.MouseButton1Click:Connect(function()
+        bgIdx = (bgIdx % #bgOptions) + 1
+        bgImageFrame.Image = bgOptions[bgIdx]
+        toggleBG.Image = bgOptions[bgIdx]
+    end)
+
+    local mCard = createModuleCard("Config", 54, MiscPage)
+    local sBtn = Instance.new("TextButton", mCard)
+    sBtn.Size = UDim2.new(1, -16, 0, 24); sBtn.Position = UDim2.new(0, 8, 0, 24)
+    sBtn.BackgroundTransparency = 1; sBtn.Text = "💾 Save PvP Config"
+    sBtn.Font = Enum.Font.GothamBold; sBtn.TextSize = 9.5; sBtn.TextColor3 = currentThemeColor
+    sBtn.MouseButton1Click:Connect(function() SaveConfig(); sBtn.Text = "✅ Saved!" end)
+end
+
+-- ============================================================
+-- LOOP RENDERSTEPPED (AIMLOCK + FOV + CHAR HOOK)
+-- ============================================================
 RunService.RenderStepped:Connect(function()
     currentSilentAimTarget = GetClosestTargetToCenter()
 
-    if PvPConfig.PlayerWidgetActive and PvPConfig.AimlockPlayer then
+    if FOVCircle then
+        local cam = workspace.CurrentCamera
+        if _G.G_SilentAimShowFOV and cam then
+            FOVCircle.Visible = true
+            FOVCircle.Radius = _G.G_SilentAimFOV or 150
+            FOVCircle.Color = currentThemeColor
+            FOVCircle.Position = Vector2.new(cam.ViewportSize.X / 2, cam.ViewportSize.Y / 2)
+        else
+            FOVCircle.Visible = false
+        end
+    end
+
+    if PlayerWidgetActive and AimlockPlayerEnabled then
         if not lockedPlayerTarget or not lockedPlayerTarget:FindFirstChild("HumanoidRootPart") then
             lockedPlayerTarget = getClosestPlayer()
         end
@@ -1091,7 +2191,7 @@ RunService.RenderStepped:Connect(function()
         lockedPlayerTarget = nil
     end
 
-    if PvPConfig.NpcWidgetActive and PvPConfig.AimlockNpc then
+    if NpcWidgetActive and AimlockNpcEnabled then
         if not lockedNpcTarget or not lockedNpcTarget:FindFirstChild("HumanoidRootPart") then
             lockedNpcTarget = getClosestNPC()
         end
@@ -1107,586 +2207,20 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ============================================================
--- ESP PVP (NOMBRE, NIVEL, BOUNTY, FRUTA, DISTANCIA, HP, HIGHLIGHT)
--- ============================================================
-local espObjects = {}
-local espRunning = false
-local lastESPUpdate = 0
+player.CharacterAdded:Connect(function(char)
+    monitorCharPortal(char)
+    enforceSoru(char)
+    if SanguineNoCDEnabled then char:SetAttribute("AllCooldown", 3) end
+    if SanguineAutoEnabled then task.wait(0.5); startSanguineAutoWatcher() end
+end)
 
-local function getTeamInfo(targetP)
-    if not targetP or not targetP.Team then
-        return "Unknown", Color3.fromRGB(255, 255, 255)
-    end
-    if targetP.Team.Name == "Marines" then
-        return "Marines", Color3.fromRGB(0, 170, 255)
-    end
-    return "Pirates", Color3.fromRGB(255, 70, 70)
+if player.Character then
+    monitorCharPortal(player.Character)
+    enforceSoru(player.Character)
 end
 
-local function removeESP(targetP)
-    if espObjects[targetP] then
-        pcall(function()
-            if espObjects[targetP].gui then espObjects[targetP].gui:Destroy() end
-            if espObjects[targetP].highlight then espObjects[targetP].highlight:Destroy() end
-        end)
-        espObjects[targetP] = nil
-    end
-end
+pcall(LoadConfig)
+updateWidgetsVisuals()
+centerAndMaximizeUI()
 
-local function DisableESP()
-    espRunning = false
-    for p in pairs(espObjects) do
-        removeESP(p)
-    end
-    espObjects = {}
-end
-
-local function createESP(targetP)
-    if not targetP or targetP == player then return end
-    local char = targetP.Character
-    local head = char and char:FindFirstChild("Head")
-    if not head then return end
-
-    local _, color = getTeamInfo(targetP)
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "DarkWare_ESP"
-    billboard.Adornee = head
-    billboard.Size = UDim2.new(0, 200, 0, 75)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = head
-
-    local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, 0, 1, 0)
-    label.BackgroundTransparency = 1
-    label.TextSize = PvPConfig.ESP_TextSize
-    label.RichText = true
-    label.Font = Enum.Font.SourceSansBold
-    label.TextStrokeTransparency = 0
-    label.TextColor3 = color
-    label.Parent = billboard
-
-    local hl = nil
-    if PvPConfig.ESP_Highlight then
-        hl = Instance.new("Highlight")
-        hl.Name = "DarkWare_ESP_HL"
-        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        hl.FillColor = Color3.fromRGB(255, 0, 0)
-        hl.FillTransparency = 0.5
-        hl.OutlineColor = Color3.fromRGB(255, 0, 0)
-        hl.Parent = char
-    end
-
-    espObjects[targetP] = { gui = billboard, label = label, char = char, highlight = hl }
-end
-
-local function updateESP()
-    if not PvPConfig.ESP_Enabled then
-        DisableESP()
-        return
-    end
-    if tick() - lastESPUpdate < 0.1 then return end
-    lastESPUpdate = tick()
-
-    local myRoot = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return end
-
-    for _, targetP in ipairs(Players:GetPlayers()) do
-        if targetP ~= player then
-            local char = targetP.Character
-            local head = char and char:FindFirstChild("Head")
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            local root = char and char:FindFirstChild("HumanoidRootPart")
-
-            if char and head and hum and root then
-                local entry = espObjects[targetP]
-                if not entry or entry.char ~= char or not entry.gui.Parent then
-                    removeESP(targetP)
-                    createESP(targetP)
-                    entry = espObjects[targetP]
-                end
-                if entry then
-                    local team, color = getTeamInfo(targetP)
-                    local dist = math.floor((root.Position - myRoot.Position).Magnitude)
-                    local hp = math.floor((hum.Health / math.max(hum.MaxHealth, 1)) * 100)
-                    local lvl, fruit, bounty = "?", "None", 0
-                    pcall(function() lvl = targetP.Data.Level.Value end)
-                    pcall(function() fruit = targetP.Data.DevilFruit.Value end)
-                    pcall(function() bounty = targetP.leaderstats["Bounty/Honor"].Value end)
-
-                    local isPvpOff = targetP:GetAttribute("PvpDisabled") == true
-                    local pvpTxt = isPvpOff and '<font color="rgb(0,255,0)">🟢 PvP OFF </font>' or "🔴 PvP ON "
-                    local bM = type(bounty) == "number" and math.floor(bounty / 1000000) or 0
-                    local warnTag = (type(bounty) == "number" and bounty > 10000000) and "⚠ " or ""
-
-                    local parts = {}
-                    if PvPConfig.ESP_Name then
-                        table.insert(parts, warnTag .. "[" .. team .. '] <font color="rgb(255,255,0)">' .. targetP.Name .. "</font>")
-                    end
-                    if PvPConfig.ESP_Level then table.insert(parts, " [Lv." .. tostring(lvl) .. "]") end
-                    if PvPConfig.ESP_Bounty then table.insert(parts, "\n" .. pvpTxt .. "| Bounty: " .. bM .. "M\n") end
-                    if PvPConfig.ESP_Fruit then table.insert(parts, "Fruit: " .. tostring(fruit) .. "\n") end
-                    if PvPConfig.ESP_Distance then table.insert(parts, tostring(dist) .. "m | ") end
-                    if PvPConfig.ESP_HP then table.insert(parts, "HP " .. tostring(hp) .. "%") end
-
-                    entry.label.TextColor3 = color
-                    entry.label.TextSize = PvPConfig.ESP_TextSize
-                    entry.label.Text = table.concat(parts)
-                end
-            else
-                removeESP(targetP)
-            end
-        end
-    end
-end
-
-local function EnableESP()
-    if espRunning then return end
-    espRunning = true
-    task.spawn(function()
-        while espRunning do
-            pcall(updateESP)
-            task.wait(0.1)
-        end
-    end)
-end
-
--- ============================================================
--- AUTO RACE V4
--- ============================================================
-task.spawn(function()
-    while true do
-        task.wait(0.6)
-        if PvPConfig.AutoV4 and player.Character then
-            pcall(function()
-                local energy = player.Character:GetAttribute("RaceEnergy")
-                if energy and energy >= 100 then
-                    local awk = player.Backpack:FindFirstChild("Awakening") or player.Character:FindFirstChild("Awakening")
-                    if awk and awk:FindFirstChild("RemoteFunction") then
-                        awk.RemoteFunction:InvokeServer(true)
-                    end
-                end
-            end)
-        end
-    end
-end)
-
--- ============================================================
--- WIDGETS FLOTANTES PVP (AIMLOCK / SUPER JUMP / SANGUINE Z)
--- ============================================================
-local widgetGui = Instance.new("ScreenGui")
-widgetGui.Name = "DarkWare_Widgets_UI"
-widgetGui.ResetOnSpawn = false
-widgetGui.DisplayOrder = 99999
-widgetGui.Parent = playerGui
-
-local function makeWidgetBtn(pos, text, onClick)
-    local b = Instance.new("TextButton", widgetGui)
-    b.Size = UDim2.new(0, 122, 0, 34)
-    b.Position = pos
-    b.BackgroundColor3 = Color3.fromRGB(16, 16, 24)
-    b.Text = text
-    b.Font = Enum.Font.GothamBold
-    b.TextSize = 10
-    b.TextColor3 = Color3.fromRGB(255, 255, 255)
-    b.Visible = false
-    b.Active = true
-    b.Draggable = true
-    Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
-    local st = Instance.new("UIStroke", b)
-    st.Color = Color3.fromRGB(170, 0, 255)
-    st.Thickness = 1.2
-    b.MouseButton1Click:Connect(onClick)
-    return b
-end
-
-local playerLockWidget = makeWidgetBtn(UDim2.new(0.82, 0, 0.20, 0), "🔓 PLAYER: OFF", function()
-    PvPConfig.AimlockPlayer = not PvPConfig.AimlockPlayer
-end)
-
-local npcLockWidget = makeWidgetBtn(UDim2.new(0.82, 0, 0.27, 0), "🔓 NPC: OFF", function()
-    PvPConfig.AimlockNpc = not PvPConfig.AimlockNpc
-end)
-
-local sjumpWidget = makeWidgetBtn(UDim2.new(0.68, 0, 0.25, 0), "⬆ JUMP", function()
-    doSuperJump()
-end)
-
-local sanguineManualWidget = makeWidgetBtn(UDim2.new(0.68, 0, 0.33, 0), "🩸 SANGUINE Z", function()
-    dropFPSManual()
-end)
-
-local sanguineAutoWidget = makeWidgetBtn(UDim2.new(0.68, 0, 0.41, 0), "⚫ Auto: OFF", function()
-    PvPConfig.SanguineAuto = not PvPConfig.SanguineAuto
-    if PvPConfig.SanguineAuto then startSanguineAutoWatcher() end
-end)
-
-local function syncWidgets()
-    playerLockWidget.Visible = PvPConfig.PlayerWidgetActive
-    playerLockWidget.Text = PvPConfig.AimlockPlayer and "🔒 PLAYER: ON" or "🔓 PLAYER: OFF"
-
-    npcLockWidget.Visible = PvPConfig.NpcWidgetActive
-    npcLockWidget.Text = PvPConfig.AimlockNpc and "🔒 NPC: ON" or "🔓 NPC: OFF"
-
-    sjumpWidget.Visible = PvPConfig.SuperJumpWidgetVisible
-    sanguineManualWidget.Visible = PvPConfig.SanguineManualWidgetVisible
-    sanguineAutoWidget.Visible = PvPConfig.SanguineWidgetVisible
-    sanguineAutoWidget.Text = PvPConfig.SanguineAuto and "🔴 Auto: ON" or "⚫ Auto: OFF"
-end
-
-task.spawn(function()
-    while true do
-        task.wait(0.15)
-        pcall(syncWidgets)
-    end
-end)
-
--- ============================================================
--- INTERFAZ DARKWARE (COMPACTA Y FUNCIONAL)
--- ============================================================
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "DarkWare_PvP_UI"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = playerGui
-
-local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size = UDim2.new(0, 430, 0, 290)
-mainFrame.Position = UDim2.new(0.5, -215, 0.5, -145)
-mainFrame.BackgroundColor3 = Color3.fromRGB(12, 10, 18)
-mainFrame.BackgroundTransparency = 0.08
-mainFrame.Active = true
-mainFrame.Draggable = true
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 14)
-
-local mainStroke = Instance.new("UIStroke", mainFrame)
-mainStroke.Color = Color3.fromRGB(170, 0, 255)
-mainStroke.Thickness = 1.4
-
-local header = Instance.new("TextLabel", mainFrame)
-header.Size = UDim2.new(1, -90, 0, 30)
-header.Position = UDim2.new(0, 12, 0, 4)
-header.BackgroundTransparency = 1
-header.Text = "DARKWARE"
-header.Font = Enum.Font.GothamBlack
-header.TextSize = 15
-header.TextColor3 = Color3.fromRGB(170, 0, 255)
-header.TextXAlignment = Enum.TextXAlignment.Left
-
-local minBtn = Instance.new("TextButton", mainFrame)
-minBtn.Size = UDim2.new(0, 24, 0, 24)
-minBtn.Position = UDim2.new(1, -58, 0, 6)
-minBtn.BackgroundColor3 = Color3.fromRGB(28, 24, 38)
-minBtn.Text = "-"
-minBtn.Font = Enum.Font.GothamBold
-minBtn.TextSize = 13
-minBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 6)
-
-local closeBtn = Instance.new("TextButton", mainFrame)
-closeBtn.Size = UDim2.new(0, 24, 0, 24)
-closeBtn.Position = UDim2.new(1, -30, 0, 6)
-closeBtn.BackgroundColor3 = Color3.fromRGB(180, 35, 55)
-closeBtn.Text = "X"
-closeBtn.Font = Enum.Font.GothamBold
-closeBtn.TextSize = 12
-closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 6)
-
-local openChip = Instance.new("TextButton", screenGui)
-openChip.Size = UDim2.new(0, 95, 0, 30)
-openChip.Position = UDim2.new(0, 15, 0.5, -15)
-openChip.BackgroundColor3 = Color3.fromRGB(16, 14, 24)
-openChip.Text = "DARKWARE"
-openChip.Font = Enum.Font.GothamBlack
-openChip.TextSize = 11
-openChip.TextColor3 = Color3.fromRGB(170, 0, 255)
-openChip.Visible = false
-openChip.Active = true
-openChip.Draggable = true
-Instance.new("UICorner", openChip).CornerRadius = UDim.new(0, 8)
-local chipStroke = Instance.new("UIStroke", openChip)
-chipStroke.Color = Color3.fromRGB(170, 0, 255)
-chipStroke.Thickness = 1.2
-
-minBtn.MouseButton1Click:Connect(function()
-    mainFrame.Visible = false
-    openChip.Visible = true
-end)
-
-openChip.MouseButton1Click:Connect(function()
-    openChip.Visible = false
-    mainFrame.Visible = true
-end)
-
-closeBtn.MouseButton1Click:Connect(function()
-    PvPConfig.FastAttack = false
-    PvPConfig.SilentAimSkill = false
-    PvPConfig.DragonGunM1 = false
-    DisableESP()
-    screenGui:Destroy()
-    widgetGui:Destroy()
-end)
-
-local tabBar = Instance.new("Frame", mainFrame)
-tabBar.Size = UDim2.new(1, -20, 0, 26)
-tabBar.Position = UDim2.new(0, 10, 0, 36)
-tabBar.BackgroundTransparency = 1
-
-local tabLayout = Instance.new("UIListLayout", tabBar)
-tabLayout.FillDirection = Enum.FillDirection.Horizontal
-tabLayout.Padding = UDim.new(0, 6)
-
-local contentScroll = Instance.new("ScrollingFrame", mainFrame)
-contentScroll.Size = UDim2.new(1, -20, 1, -72)
-contentScroll.Position = UDim2.new(0, 10, 0, 66)
-contentScroll.BackgroundTransparency = 1
-contentScroll.ScrollBarThickness = 3
-contentScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
-contentScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-
-local contentLayout = Instance.new("UIListLayout", contentScroll)
-contentLayout.Padding = UDim.new(0, 6)
-
-local pages = {}
-local function newPage(name)
-    local f = Instance.new("Frame", contentScroll)
-    f.Name = name
-    f.Size = UDim2.new(1, 0, 0, 0)
-    f.AutomaticSize = Enum.AutomaticSize.Y
-    f.BackgroundTransparency = 1
-    f.Visible = false
-    local l = Instance.new("UIListLayout", f)
-    l.Padding = UDim.new(0, 5)
-    pages[name] = f
-    return f
-end
-
-local combatPage = newPage("Aim & Hit")
-local movePage = newPage("Move & Soru")
-local glitchesPage = newPage("PvP Glitches")
-local espPage = newPage("ESP & Lock")
-combatPage.Visible = true
-
-local function makeToggleRow(parent, text, initial, cb)
-    local row = Instance.new("Frame", parent)
-    row.Size = UDim2.new(1, -4, 0, 26)
-    row.BackgroundColor3 = Color3.fromRGB(22, 19, 32)
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
-
-    local lbl = Instance.new("TextLabel", row)
-    lbl.Size = UDim2.new(0.72, 0, 1, 0)
-    lbl.Position = UDim2.new(0, 8, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = text
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 10
-    lbl.TextColor3 = Color3.fromRGB(240, 240, 245)
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-    local state = initial
-    local btn = Instance.new("TextButton", row)
-    btn.Size = UDim2.new(0, 44, 0, 18)
-    btn.Position = UDim2.new(1, -50, 0.5, -9)
-    btn.BackgroundColor3 = state and Color3.fromRGB(170, 0, 255) or Color3.fromRGB(45, 40, 58)
-    btn.Text = state and "ON" or "OFF"
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 9
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 5)
-
-    local function apply(val)
-        state = val
-        btn.BackgroundColor3 = state and Color3.fromRGB(170, 0, 255) or Color3.fromRGB(45, 40, 58)
-        btn.Text = state and "ON" or "OFF"
-        cb(state)
-    end
-
-    btn.MouseButton1Click:Connect(function()
-        apply(not state)
-        SaveDarkWarePvP()
-    end)
-
-    return apply
-end
-
-local function makeStepRow(parent, text, minV, maxV, stepV, getV, setV, suffix)
-    local row = Instance.new("Frame", parent)
-    row.Size = UDim2.new(1, -4, 0, 26)
-    row.BackgroundColor3 = Color3.fromRGB(22, 19, 32)
-    Instance.new("UICorner", row).CornerRadius = UDim.new(0, 6)
-
-    local lbl = Instance.new("TextLabel", row)
-    lbl.Size = UDim2.new(0.54, 0, 1, 0)
-    lbl.Position = UDim2.new(0, 8, 0, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = text
-    lbl.Font = Enum.Font.GothamBold
-    lbl.TextSize = 10
-    lbl.TextColor3 = Color3.fromRGB(240, 240, 245)
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-
-    local minus = Instance.new("TextButton", row)
-    minus.Size = UDim2.new(0, 20, 0, 18)
-    minus.Position = UDim2.new(1, -86, 0.5, -9)
-    minus.BackgroundColor3 = Color3.fromRGB(40, 35, 55)
-    minus.Text = "-"
-    minus.Font = Enum.Font.GothamBold
-    minus.TextSize = 11
-    minus.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Instance.new("UICorner", minus).CornerRadius = UDim.new(0, 4)
-
-    local valLbl = Instance.new("TextLabel", row)
-    valLbl.Size = UDim2.new(0, 42, 0, 18)
-    valLbl.Position = UDim2.new(1, -64, 0.5, -9)
-    valLbl.BackgroundTransparency = 1
-    valLbl.Text = tostring(getV()) .. (suffix or "")
-    valLbl.Font = Enum.Font.GothamBold
-    valLbl.TextSize = 9.5
-    valLbl.TextColor3 = Color3.fromRGB(200, 150, 255)
-
-    local plus = Instance.new("TextButton", row)
-    plus.Size = UDim2.new(0, 20, 0, 18)
-    plus.Position = UDim2.new(1, -22, 0.5, -9)
-    plus.BackgroundColor3 = Color3.fromRGB(40, 35, 55)
-    plus.Text = "+"
-    plus.Font = Enum.Font.GothamBold
-    plus.TextSize = 11
-    plus.TextColor3 = Color3.fromRGB(255, 255, 255)
-    Instance.new("UICorner", plus).CornerRadius = UDim.new(0, 4)
-
-    minus.MouseButton1Click:Connect(function()
-        local nv = math.max(minV, math.floor((getV() - stepV) * 100 + 0.5) / 100)
-        setV(nv)
-        valLbl.Text = tostring(nv) .. (suffix or "")
-        SaveDarkWarePvP()
-    end)
-
-    plus.MouseButton1Click:Connect(function()
-        local nv = math.min(maxV, math.floor((getV() + stepV) * 100 + 0.5) / 100)
-        setV(nv)
-        valLbl.Text = tostring(nv) .. (suffix or "")
-        SaveDarkWarePvP()
-    end)
-end
-
-for _, tabName in ipairs({ "Aim & Hit", "Move & Soru", "PvP Glitches", "ESP & Lock" }) do
-    local tBtn = Instance.new("TextButton", tabBar)
-    tBtn.Size = UDim2.new(0, 96, 1, 0)
-    tBtn.BackgroundColor3 = Color3.fromRGB(26, 22, 38)
-    tBtn.Text = tabName
-    tBtn.Font = Enum.Font.GothamBold
-    tBtn.TextSize = 9.5
-    tBtn.TextColor3 = Color3.fromRGB(235, 235, 245)
-    Instance.new("UICorner", tBtn).CornerRadius = UDim.new(0, 6)
-    tBtn.MouseButton1Click:Connect(function()
-        for k, pg in pairs(pages) do
-            pg.Visible = (k == tabName)
-        end
-    end)
-end
-
--- POBLAR PÁGINA 1: AIM & HIT
-makeToggleRow(combatPage, "Aimbot Skills (Silent Aim)", PvPConfig.SilentAimSkill, function(v) PvPConfig.SilentAimSkill = v end)
-makeToggleRow(combatPage, "Aimbot M1 (Dragon Gun)", PvPConfig.DragonGunM1, function(v) PvPConfig.DragonGunM1 = v end)
-makeToggleRow(combatPage, "Fast Attack (Multi-Target)", PvPConfig.FastAttack, function(v)
-    PvPConfig.FastAttack = v
-    if v then StartFastAttack() end
-end)
-makeToggleRow(combatPage, "Target Players", PvPConfig.TargetPlayers, function(v) PvPConfig.TargetPlayers = v end)
-makeToggleRow(combatPage, "Target NPCs", PvPConfig.TargetMobs, function(v) PvPConfig.TargetMobs = v end)
-makeToggleRow(combatPage, "Team Check", PvPConfig.TeamCheck, function(v) PvPConfig.TeamCheck = v end)
-makeToggleRow(combatPage, "Ignore SafeZone", PvPConfig.SafeZoneCheck, function(v) PvPConfig.SafeZoneCheck = v end)
-makeToggleRow(combatPage, "Ignore PvP OFF", PvPConfig.PvPCheck, function(v) PvPConfig.PvPCheck = v end)
-makeStepRow(combatPage, "Aimbot Max Dist", 100, 5000, 250, function() return PvPConfig.MaxRange end, function(v) PvPConfig.MaxRange = v end, "st")
-
--- POBLAR PÁGINA 2: MOVE & SORU
-makeToggleRow(movePage, "Walk Speed Boost", PvPConfig.WalkSpeed, function(v) PvPConfig.WalkSpeed = v end)
-makeStepRow(movePage, "Speed Value", 16, 500, 50, function() return PvPConfig.WalkSpeedValue end, function(v) PvPConfig.WalkSpeedValue = v end, "")
-makeToggleRow(movePage, "Dash Distance Boost", PvPConfig.DashEnabled, function(v)
-    PvPConfig.DashEnabled = v
-    if v then
-        prevDashLength = PvPConfig.DashLengthDist
-        applyDashInstantly()
-    elseif player.Character then
-        player.Character:SetAttribute("DashLength", 1)
-        player.Character:SetAttribute("DashLengthAir", 1)
-    end
-end)
-makeStepRow(movePage, "Dash Distance", 1, 300, 10, function() return PvPConfig.DashLengthDist end, function(v)
-    PvPConfig.DashLengthDist = v
-    if PvPConfig.DashEnabled then applyDashInstantly() end
-end, "")
-makeToggleRow(movePage, "Noclip", PvPConfig.Noclip, function(v) SetNoclip(v) end)
-makeToggleRow(movePage, "Walk on Water", PvPConfig.WalkOnWater, function(v) PvPConfig.WalkOnWater = v end)
-makeToggleRow(movePage, "Infinite Soru", PvPConfig.InfSoru, function(v)
-    PvPConfig.InfSoru = v
-    if v and player.Character then enforceSoru(player.Character) end
-end)
-makeToggleRow(movePage, "Soru Aimbot", PvPConfig.SoruAimbot, function(v) PvPConfig.SoruAimbot = v end)
-makeToggleRow(movePage, "Portal Soru Combo (XZ)", PvPConfig.PortalSoru, function(v) PvPConfig.PortalSoru = v end)
-makeToggleRow(movePage, "Portal Sanguine C Combo", PvPConfig.PortalSanguineC, function(v) PvPConfig.PortalSanguineC = v end)
-makeToggleRow(movePage, "Flashstep Skill Combo", PvPConfig.FlashstepSkill, function(v) PvPConfig.FlashstepSkill = v end)
-makeStepRow(movePage, "Skill Delay", 0.05, 2.0, 0.05, function() return PvPConfig.FlashstepSkillDelay end, function(v) PvPConfig.FlashstepSkillDelay = v end, "s")
-
--- POBLAR PÁGINA 3: PVP GLITCHES
-makeToggleRow(glitchesPage, "Sanguine Z No Cooldown", PvPConfig.SanguineNoCD, function(v) setSanguineNoCD(v) end)
-makeToggleRow(glitchesPage, "Sanguine Z Auto", PvPConfig.SanguineAuto, function(v)
-    PvPConfig.SanguineAuto = v
-    PvPConfig.SanguineWidgetVisible = v
-    if v then startSanguineAutoWatcher() end
-end)
-makeToggleRow(glitchesPage, "Sanguine Z TP Widget", PvPConfig.SanguineManualWidgetVisible, function(v)
-    PvPConfig.SanguineManualWidgetVisible = v
-end)
-makeStepRow(glitchesPage, "Sanguine Drop Dur", 0.5, 5.0, 0.5, function() return PvPConfig.SanguineAutoDropDuration end, function(v) PvPConfig.SanguineAutoDropDuration = v end, "s")
-makeToggleRow(glitchesPage, "Anti Stun & Hitbox [Beta]", PvPConfig.AntiStunHitbox, function(v)
-    if v then enableAntiStunHitbox() else disableAntiStunHitbox() end
-end)
-makeToggleRow(glitchesPage, "No Animations", PvPConfig.NoAnim, function(v) PvPConfig.NoAnim = v end)
-makeToggleRow(glitchesPage, "Super Jump Widget", PvPConfig.SuperJumpWidgetVisible, function(v)
-    PvPConfig.SuperJumpWidgetVisible = v
-end)
-makeStepRow(glitchesPage, "Super Jump Power", 100, 1200, 100, function() return PvPConfig.SuperJumpPower end, function(v) PvPConfig.SuperJumpPower = v end, "")
-makeToggleRow(glitchesPage, "Soul Guitar Glitch", PvPConfig.SoulGuitarJump, function(v)
-    PvPConfig.SoulGuitarJump = v
-    if v then
-        prevDashLength = PvPConfig.DashLengthDist
-        PvPConfig.DashLengthDist = PvPConfig.SoulGuitarDashLength
-        PvPConfig.DashEnabled = true
-        applyDashInstantly()
-    else
-        PvPConfig.DashLengthDist = prevDashLength or 1
-        applyDashInstantly()
-    end
-end)
-makeToggleRow(glitchesPage, "Auto Race V4", PvPConfig.AutoV4, function(v) PvPConfig.AutoV4 = v end)
-
--- POBLAR PÁGINA 4: ESP & LOCK
-makeToggleRow(espPage, "Player Lock Widget", PvPConfig.PlayerWidgetActive, function(v) PvPConfig.PlayerWidgetActive = v end)
-makeToggleRow(espPage, "NPC Lock Widget", PvPConfig.NpcWidgetActive, function(v) PvPConfig.NpcWidgetActive = v end)
-makeToggleRow(espPage, "ESP Players (PvP Info)", PvPConfig.ESP_Enabled, function(v)
-    PvPConfig.ESP_Enabled = v
-    if v then EnableESP() else DisableESP() end
-end)
-makeToggleRow(espPage, "ESP Name & Level", PvPConfig.ESP_Name, function(v)
-    PvPConfig.ESP_Name = v
-    PvPConfig.ESP_Level = v
-end)
-makeToggleRow(espPage, "ESP Bounty & PvP State", PvPConfig.ESP_Bounty, function(v) PvPConfig.ESP_Bounty = v end)
-makeToggleRow(espPage, "ESP Fruit & Dist/HP", PvPConfig.ESP_Fruit, function(v)
-    PvPConfig.ESP_Fruit = v
-    PvPConfig.ESP_Distance = v
-    PvPConfig.ESP_HP = v
-end)
-makeToggleRow(espPage, "ESP Highlight", PvPConfig.ESP_Highlight, function(v) PvPConfig.ESP_Highlight = v end)
-
--- Inicializar funciones activas desde config guardada
-if PvPConfig.FastAttack then StartFastAttack() end
-if PvPConfig.AntiStunHitbox then enableAntiStunHitbox() end
-if PvPConfig.SanguineNoCD then setSanguineNoCD(true) end
-if PvPConfig.SanguineAuto then startSanguineAutoWatcher() end
-if PvPConfig.ESP_Enabled then EnableESP() end
-syncWidgets()
-
-print("DARKWARE PvP Loaded Successfully.")
+print("DARKWARE PvP Loaded (Original UI Kept).")
