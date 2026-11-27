@@ -6,6 +6,7 @@ local Stats = game:GetService("Stats")
 
 local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
+local mouse = player:GetMouse()
 local parentGui = (gethui and gethui()) or game:GetService("CoreGui") or player:WaitForChild("PlayerGui")
 
 if parentGui:FindFirstChild("UI_DarkWare") then
@@ -76,6 +77,7 @@ local aimState = {
 }
 
 local currentTargetPlayer = nil
+local currentTargetPart = nil
 
 local fovFrame = Instance.new("Frame")
 fovFrame.Name = "DarkWareAimFov"
@@ -512,6 +514,7 @@ statusTitle.Font = Enum.Font.GothamBold
 statusTitle.TextSize = 14
 statusTitle.TextXAlignment = Enum.TextXAlignment.Center
 statusTitle.ZIndex = 18
+statusCard.Parent = homeBody
 statusTitle.Parent = statusCard
 
 local fpsPingLine = Instance.new("TextLabel")
@@ -637,7 +640,7 @@ local combatStatusLine = Instance.new("TextLabel")
 combatStatusLine.Size = UDim2.new(1, -24, 0, 18)
 combatStatusLine.Position = UDim2.new(0, 12, 0, 28)
 combatStatusLine.BackgroundTransparency = 1
-combatStatusLine.Text = "Aim | OFF  Mode | Nearest  FOV | 160"
+combatStatusLine.Text = "Silent Aim | OFF  Mode | Nearest  FOV | 160"
 combatStatusLine.TextColor3 = palette.muted
 combatStatusLine.Font = Enum.Font.GothamBold
 combatStatusLine.TextSize = 11
@@ -648,7 +651,7 @@ combatStatusLine.Parent = combatStatusCard
 
 local function refreshCombatStatusLabel()
 	combatStatusLine.Text = string.format(
-		"Aim | %s  Mode | %s  FOV | %d",
+		"Silent Aim | %s  Mode | %s  FOV | %d",
 		aimState.enabled and "ON" or "OFF",
 		aimState.mode,
 		aimState.fovSize
@@ -656,7 +659,7 @@ local function refreshCombatStatusLabel()
 end
 
 local aimCard = Instance.new("TextButton")
-aimCard.Name = "AimToggleCard"
+aimCard.Name = "SilentAimToggleCard"
 aimCard.Size = UDim2.new(1, 0, 0, 44)
 aimCard.BackgroundColor3 = palette.cardBlack
 aimCard.BackgroundTransparency = 0.08
@@ -672,7 +675,7 @@ local aimLbl = Instance.new("TextLabel")
 aimLbl.Size = UDim2.new(0.55, 0, 1, 0)
 aimLbl.Position = UDim2.new(0, 14, 0, 0)
 aimLbl.BackgroundTransparency = 1
-aimLbl.Text = "Aim"
+aimLbl.Text = "Silent Aim"
 aimLbl.TextColor3 = palette.white
 aimLbl.Font = Enum.Font.GothamBold
 aimLbl.TextSize = 13
@@ -706,6 +709,7 @@ aimCard.MouseButton1Click:Connect(function()
 		aimBadge.TextColor3 = palette.muted
 		aimStroke.Transparency = 0.35
 		currentTargetPlayer = nil
+		currentTargetPart = nil
 	end
 	fovFrame.Visible = aimState.enabled
 	refreshCombatStatusLabel()
@@ -851,7 +855,7 @@ local function isValidEnemyCharacter(plr)
 	return nil
 end
 
-local function resolveBasicAimTarget()
+local function resolveSilentAimTarget()
 	if aimState.mode ~= "Nearest" then
 		local chosenPlr = Players:FindFirstChild(aimState.mode)
 		local part = isValidEnemyCharacter(chosenPlr)
@@ -886,15 +890,52 @@ local function resolveBasicAimTarget()
 	return bestPlr, bestPart
 end
 
-local function applyLightAim(targetPart, dt)
-	if not aimState.enabled or not targetPart or not targetPart.Parent then
-		return
+-- Silent Aim real sem mover a câmera nem alterar o movimento do personagem
+pcall(function()
+	if not hookmetamethod or not getnamecallmethod then return end
+
+	local oldNamecall
+	oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+		if aimState.enabled and currentTargetPart and currentTargetPart.Parent then
+			local method = getnamecallmethod()
+			local targetPos = currentTargetPart.Position
+
+			if method == "Raycast" and self == workspace then
+				local args = {...}
+				if typeof(args[1]) == "Vector3" then
+					args[2] = (targetPos - args[1]).Unit * 1000
+					return oldNamecall(self, table.unpack(args))
+				end
+			elseif method == "FindPartOnRay" or method == "FindPartOnRayWithIgnoreList" or method == "FindPartOnRayWithWhitelist" then
+				local args = {...}
+				if typeof(args[1]) == "Ray" then
+					local origin = args[1].Origin
+					args[1] = Ray.new(origin, (targetPos - origin).Unit * 1000)
+					return oldNamecall(self, table.unpack(args))
+				end
+			end
+		end
+		return oldNamecall(self, ...)
+	end)
+
+	if newcclosure and hookfunction and mouse then
+		local oldIndex
+		oldIndex = hookmetamethod(game, "__index", function(self, key)
+			if aimState.enabled and currentTargetPart and currentTargetPart.Parent and self == mouse then
+				local targetPos = currentTargetPart.Position
+				if key == "Hit" then
+					return CFrame.new(targetPos)
+				elseif key == "Target" then
+					return currentTargetPart
+				elseif key == "UnitRay" then
+					local origin = camera.CFrame.Position
+					return Ray.new(origin, (targetPos - origin).Unit)
+				end
+			end
+			return oldIndex(self, key)
+		end)
 	end
-	local camPos = camera.CFrame.Position
-	local desiredCf = CFrame.lookAt(camPos, targetPart.Position)
-	local alpha = math.clamp(dt * 8.5, 0.04, 0.25)
-	camera.CFrame = camera.CFrame:Lerp(desiredCf, alpha)
-end
+end)
 
 local function getSingleFactionText()
 	local team = player.Team
@@ -1016,13 +1057,12 @@ renderConn = RunService.RenderStepped:Connect(function(dt)
 	end
 
 	if aimState.enabled then
-		local plr, part = resolveBasicAimTarget()
+		local plr, part = resolveSilentAimTarget()
 		currentTargetPlayer = plr
-		if part then
-			applyLightAim(part, dt)
-		end
+		currentTargetPart = part
 	else
 		currentTargetPlayer = nil
+		currentTargetPart = nil
 	end
 
 	if statsTimer >= 0.25 then
